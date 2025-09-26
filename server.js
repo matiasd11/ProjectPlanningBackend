@@ -3,16 +3,30 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
+const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
+// Importar modelos y servicios
+const { syncDatabase } = require('./models');
 const bonitaRoutes = require('./routes/bonita');
 const authRoutes = require('./routes/auth');
+const projectRoutes = require('./routes/projects');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware de seguridad
 app.use(helmet());
+
+// Rate limiting global
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 1000, // límite de requests por ventana de tiempo
+  message: {
+    error: 'Demasiadas requests desde esta IP, prueba de nuevo más tarde.'
+  }
+});
+app.use(globalLimiter);
 
 // Configuración de CORS
 const corsOptions = {
@@ -35,6 +49,7 @@ if (process.env.NODE_ENV === 'development') {
 // Rutas
 app.use('/api/auth', authRoutes);
 app.use('/api/bonita', bonitaRoutes);
+app.use('/api/projects', projectRoutes);
 
 // Ruta de healthcheck
 app.get('/health', (req, res) => {
@@ -75,10 +90,19 @@ app.use((error, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Bonita Server: ${process.env.BONITA_SERVER_URL}`);
+  
+  // Inicializar base de datos
+  console.log('🔄 Connecting to database...');
+  const dbConnected = await syncDatabase();
+  if (dbConnected) {
+    console.log('✅ Database ready!');
+  } else {
+    console.log('❌ Database connection failed!');
+  }
 });
 
 module.exports = app;

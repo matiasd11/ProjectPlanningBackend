@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  # MySQL Database para desarrollo
+  mysql-dev:
+    image: mysql:8.0
+    container_name: projectplanning_mysql_dev
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: projectplanning
+      MYSQL_USER: projectuser
+      MYSQL_PASSWORD: projectpass
+    ports:
+      - "3307:3306"  # Puerto diferente para no conflicto
+    volumes:
+      - mysql_dev_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - dev_network
+    command: --default-authentication-plugin=mysql_native_password
+
+  # Adminer para gestión de BD
+  adminer-dev:
+    image: adminer:latest
+    container_name: projectplanning_adminer_dev
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    depends_on:
+      - mysql-dev
+    networks:
+      - dev_network
+    environment:
+      ADMINER_DEFAULT_SERVER: mysql-dev
+
+volumes:
+  mysql_dev_data:
+    driver: local
+
+networks:
+  dev_network:
+    driver: bridge

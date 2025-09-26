@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { Project, ProjectForm, User } = require('../models');
 
 class BonitaService {
   constructor() {
