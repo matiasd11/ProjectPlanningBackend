@@ -42,19 +42,6 @@ const Project = sequelize.define('Project', {
       }
     }
   },
-  budget: {
-    type: DataTypes.DECIMAL(15, 2),
-    validate: {
-      min: 0
-    }
-  },
-  currency: {
-    type: DataTypes.STRING(3),
-    defaultValue: 'USD',
-    validate: {
-      len: [3, 3]
-    }
-  },
   status: {
     type: DataTypes.ENUM(
       'draft',
@@ -62,14 +49,10 @@ const Project = sequelize.define('Project', {
       'active',
       'on_hold',
       'completed',
-      'cancelled'
+      'cancelled',
+      'pending_approval'
     ),
     defaultValue: 'draft',
-    allowNull: false
-  },
-  priority: {
-    type: DataTypes.ENUM('low', 'medium', 'high', 'critical'),
-    defaultValue: 'medium',
     allowNull: false
   },
   progress: {
@@ -89,15 +72,22 @@ const Project = sequelize.define('Project', {
       model: 'users',
       key: 'id'
     }
+  },
+  // Referencia al caso en Bonita BPM
+  bonitaCaseId: {
+    type: DataTypes.BIGINT,
+    allowNull: true,
+    field: 'bonita_case_id',
+    comment: 'ID del caso en Bonita BPM'
   }
 }, {
   tableName: 'projects',
   indexes: [
     { fields: ['created_by'] },
     { fields: ['status'] },
-    { fields: ['priority'] },
     { fields: ['start_date'] },
-    { fields: ['end_date'] }
+    { fields: ['end_date'] },
+    { fields: ['bonita_case_id'] }
   ],
   hooks: {
     beforeValidate: (project) => {

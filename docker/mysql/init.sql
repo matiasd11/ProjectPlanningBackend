@@ -8,7 +8,8 @@ CREATE DATABASE IF NOT EXISTS `projectplanning` DEFAULT CHARACTER SET utf8mb4 CO
 -- Use the database
 USE `projectplanning`;
 
--- Grant all privileges to the project user
+-- Create user and grant privileges
+CREATE USER IF NOT EXISTS 'projectuser'@'%' IDENTIFIED BY 'projectpass';
 GRANT ALL PRIVILEGES ON `projectplanning`.* TO 'projectuser'@'%';
 FLUSH PRIVILEGES;
 

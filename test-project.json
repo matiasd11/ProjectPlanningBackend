@@ -1,0 +1,27 @@
+{
+  "name": "Limpieza de Río Urbano",
+  "description": "Proyecto para limpiar y restaurar el ecosistema del Río de la Plata en 3 sectores críticos",
+  "startDate": "2025-02-01",
+  "endDate": "2025-08-31",
+  "ownerId": 2,
+  "tasks": [
+    {
+      "title": "Evaluación de contaminación",
+      "description": "Análisis del nivel de contaminación actual en los 3 sectores",
+      "dueDate": "2025-02-28",
+      "estimatedHours": 40
+    },
+    {
+      "title": "Diseño plan de limpieza",
+      "description": "Crear plan detallado de limpieza y restauración",
+      "dueDate": "2025-03-31",
+      "estimatedHours": 60
+    },
+    {
+      "title": "Coordinación voluntarios",
+      "description": "Organizar equipos de voluntarios para la limpieza",
+      "dueDate": "2025-04-15",
+      "estimatedHours": 20
+    }
+  ]
+}

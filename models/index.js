@@ -110,8 +110,7 @@ const seedData = async () => {
         password: 'admin123',
         organizationName: 'Administración del Sistema',
         description: 'Usuario administrador del sistema de gestión de proyectos',
-        role: 'admin',
-        contactPerson: 'Admin User'
+        role: 'admin'
       }
     });
 
@@ -124,7 +123,6 @@ const seedData = async () => {
         organizationName: 'ONG Verde Futuro',
         description: 'Organización dedicada a la protección del medio ambiente y sostenibilidad',
         website: 'https://ongverde.org',
-        contactPerson: 'María González',
         phone: '+54-11-1234-5678',
         role: 'ong'
       }
@@ -139,8 +137,8 @@ const seedData = async () => {
         organizationName: 'Fundación Ayuda Social',
         description: 'Fundación dedicada a la ayuda social y desarrollo comunitario',
         website: 'https://ayudasocial.org',
-        contactPerson: 'Carlos Rodríguez',
         phone: '+54-11-9876-5432',
+        role: 'ong'
       }
     });
 
@@ -153,7 +151,6 @@ const seedData = async () => {
         organizationName: 'Tech Volunteers',
         description: 'Grupo de voluntarios tecnológicos que colaboran en proyectos de ONGs',
         website: 'https://techvolunteers.org',
-        contactPerson: 'Ana López',
         phone: '+54-11-5555-1234',
         role: 'collaborator'
       }
@@ -167,10 +164,7 @@ const seedData = async () => {
         description: 'Proyecto para plantar 1000 árboles en zonas urbanas de Buenos Aires',
         startDate: new Date('2025-01-01'),
         endDate: new Date('2025-12-31'),
-        budget: 50000,
-        currency: 'USD',
         status: 'active',
-        priority: 'high',
         progress: 15,
         createdBy: ongAmbiental[0].id
       }
@@ -183,7 +177,6 @@ const seedData = async () => {
         title: 'Selección de ubicaciones',
         description: 'Mapear y seleccionar las 50 ubicaciones prioritarias para la plantación',
         status: 'done',
-        priority: 'high',
         dueDate: new Date('2025-02-15'),
         estimatedHours: 20,
         actualHours: 18,
@@ -199,7 +192,6 @@ const seedData = async () => {
         title: 'Compra de plantines',
         description: 'Adquirir 1000 plantines de especies nativas apropiadas para el clima urbano',
         status: 'todo', // Disponible para que alguien se haga cargo
-        priority: 'high',
         dueDate: new Date('2025-03-01'),
         estimatedHours: 8,
         actualHours: 0,

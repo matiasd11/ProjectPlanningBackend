@@ -56,11 +56,6 @@ const User = sequelize.define('User', {
     },
     comment: 'Sitio web de la ONG'
   },
-  contactPerson: {
-    type: DataTypes.STRING(100),
-    field: 'contact_person',
-    comment: 'Persona de contacto principal'
-  },
   phone: {
     type: DataTypes.STRING(20),
     validate: {

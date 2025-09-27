@@ -26,11 +26,6 @@ const Task = sequelize.define('Task', {
     defaultValue: 'todo',
     allowNull: false
   },
-  priority: {
-    type: DataTypes.ENUM('low', 'medium', 'high', 'critical'),
-    defaultValue: 'medium',
-    allowNull: false
-  },
   dueDate: {
     type: DataTypes.DATE,
     field: 'due_date',
@@ -87,7 +82,6 @@ const Task = sequelize.define('Task', {
     { fields: ['taken_by'] },
     { fields: ['created_by'] },
     { fields: ['status'] },
-    { fields: ['priority'] },
     { fields: ['due_date'] }
   ]
 });
