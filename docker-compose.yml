@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: project-planning-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${DB_NAME:-projectplanning}
+      MYSQL_USER: ${DB_USER:-projectuser}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-projectpass}
+    ports:
+      - "${DB_EXTERNAL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - project-planning-network
+    command: --default-authentication-plugin=mysql_native_password
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: project-planning-backend
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-5000}:5000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 5000
+      DB_HOST: mysql
+      DB_USER: ${DB_USER:-projectuser}
+      DB_PASSWORD: ${DB_PASSWORD:-projectpass}
+      DB_NAME: ${DB_NAME:-projectplanning}
+      DB_PORT: 3306
+    depends_on:
+      - mysql
+    networks:
+      - project-planning-network
+
+volumes:
+  mysql_data:
+
+networks:
+  project-planning-network:
+    driver: bridge
