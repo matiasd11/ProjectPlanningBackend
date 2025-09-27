@@ -89,30 +89,11 @@ const Project = sequelize.define('Project', {
       model: 'users',
       key: 'id'
     }
-  },
-  // Foreign Key para el manager
-  managerId: {
-    type: DataTypes.INTEGER,
-    field: 'manager_id',
-    references: {
-      model: 'users', 
-      key: 'id'
-    }
-  },
-  // Metadata adicional
-  tags: {
-    type: DataTypes.JSON,
-    defaultValue: []
-  },
-  metadata: {
-    type: DataTypes.JSON,
-    defaultValue: {}
   }
 }, {
   tableName: 'projects',
   indexes: [
     { fields: ['created_by'] },
-    { fields: ['manager_id'] },
     { fields: ['status'] },
     { fields: ['priority'] },
     { fields: ['start_date'] },

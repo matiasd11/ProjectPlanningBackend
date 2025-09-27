@@ -6,7 +6,7 @@ const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 // Importar modelos y base de datos
-const { syncDatabase, seedData, models } = require('./models');
+const { syncDatabase, seedData, models, sequelize } = require('./models');
 const { User, Project, Task } = models;
 
 const app = express();
@@ -17,8 +17,8 @@ app.use(helmet());
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 1000, // límite de requests por IP
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
   message: { error: 'Demasiadas requests, intenta en 15 minutos' }
 });
 app.use(limiter);
@@ -49,9 +49,7 @@ app.get('/health', (req, res) => {
   });
 });
 
-// 📊 RUTAS PRINCIPALES
-
-// 👥 USUARIOS
+// 👥 USUARIOS (ONGs)
 app.get('/api/users', async (req, res) => {
   try {
     const users = await User.findAll({
@@ -61,15 +59,10 @@ app.get('/api/users', async (req, res) => {
           model: Project,
           as: 'createdProjects',
           attributes: ['id', 'name', 'status']
-        },
-        {
-          model: Project,
-          as: 'managedProjects',
-          attributes: ['id', 'name', 'status']
         }
       ]
     });
-    
+
     res.json({
       success: true,
       data: users,
@@ -79,28 +72,40 @@ app.get('/api/users', async (req, res) => {
     console.error('Error getting users:', error);
     res.status(500).json({
       success: false,
-      message: 'Error obteniendo usuarios',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: 'Error obteniendo usuarios'
     });
   }
 });
 
 app.post('/api/users', async (req, res) => {
   try {
-    const { username, email, password, firstName, lastName, role } = req.body;
+    const {
+      username,
+      email,
+      password,
+      organizationName,
+      description,
+      website,
+      contactPerson,
+      phone,
+      role = 'ong'
+    } = req.body;
     
     const user = await User.create({
       username,
       email,
       password,
-      firstName,
-      lastName,
-      role: role || 'user'
+      organizationName,
+      description,
+      website,
+      contactPerson,
+      phone,
+      role
     });
     
     res.status(201).json({
       success: true,
-      message: 'Usuario creado exitosamente',
+      message: 'ONG registrada exitosamente',
       data: user.toSafeJSON()
     });
   } catch (error) {
@@ -130,22 +135,23 @@ app.get('/api/projects', async (req, res) => {
         {
           model: User,
           as: 'creator',
-          attributes: ['id', 'username', 'firstName', 'lastName']
-        },
-        {
-          model: User,
-          as: 'manager',
-          attributes: ['id', 'username', 'firstName', 'lastName']
+          attributes: ['id', 'username', 'organizationName', 'email', 'role', 'website']
         },
         {
           model: Task,
           as: 'tasks',
-          attributes: ['id', 'title', 'status', 'priority']
+          attributes: ['id', 'title', 'status', 'priority'],
+          include: [{
+            model: User,
+            as: 'volunteer',
+            attributes: ['id', 'username', 'organizationName'],
+            required: false
+          }]
         }
       ],
       limit: parseInt(limit),
       offset: parseInt(offset),
-      order: [['createdAt', 'DESC']]
+      order: [['created_at', 'DESC']]
     });
     
     res.json({
@@ -162,56 +168,125 @@ app.get('/api/projects', async (req, res) => {
     console.error('Error getting projects:', error);
     res.status(500).json({
       success: false,
-      message: 'Error obteniendo proyectos',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: 'Error obteniendo proyectos'
     });
   }
 });
 
 app.post('/api/projects', async (req, res) => {
+  const transaction = await sequelize.transaction();
+  
   try {
     const {
       name,
       description,
       startDate,
       endDate,
-      budget,
-      currency = 'USD',
+      tasks = [],
+      ownerId,
       priority = 'medium',
-      createdBy,
-      managerId,
-      tags = [],
-      metadata = {}
+      budget,
+      currency = 'USD'
     } = req.body;
-    
+
+    // Validaciones
+    if (!name || !startDate || !endDate || !ownerId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Faltan campos obligatorios: name, startDate, endDate, ownerId'
+      });
+    }
+
+    // Verificar que la ONG existe
+    const owner = await User.findByPk(ownerId);
+    if (!owner) {
+      return res.status(404).json({
+        success: false,
+        message: 'ONG no encontrada'
+      });
+    }
+
+    // Crear el proyecto
     const project = await Project.create({
       name,
       description,
-      startDate,
-      endDate,
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+      priority,
       budget,
       currency,
-      priority,
-      createdBy,
-      managerId,
-      tags,
-      metadata
-    });
-    
-    // Obtener proyecto completo con relaciones
+      status: 'planning',
+      progress: 0,
+      createdBy: ownerId
+    }, { transaction });
+
+    // Crear tasks asociadas
+    const createdTasks = [];
+    if (tasks && tasks.length > 0) {
+      for (const taskData of tasks) {
+        const {
+          title,
+          description: taskDescription,
+          dueDate,
+          priority: taskPriority = 'medium',
+          estimatedHours
+        } = taskData;
+
+        if (!title) {
+          throw new Error(`Task sin título encontrada`);
+        }
+
+        const task = await Task.create({
+          title,
+          description: taskDescription,
+          status: 'todo',
+          priority: taskPriority,
+          dueDate: dueDate ? new Date(dueDate) : null,
+          estimatedHours,
+          actualHours: 0,
+          projectId: project.id,
+          takenBy: null,
+          createdBy: ownerId
+        }, { transaction });
+
+        createdTasks.push(task);
+      }
+    }
+
+    await transaction.commit();
+
+    // Obtener proyecto completo
     const completeProject = await Project.findByPk(project.id, {
       include: [
-        { model: User, as: 'creator', attributes: ['id', 'username', 'firstName', 'lastName'] },
-        { model: User, as: 'manager', attributes: ['id', 'username', 'firstName', 'lastName'] }
+        { 
+          model: User, 
+          as: 'creator', 
+          attributes: ['id', 'username', 'organizationName', 'email', 'role'] 
+        },
+        {
+          model: Task,
+          as: 'tasks',
+          include: [{
+            model: User,
+            as: 'volunteer',
+            attributes: ['id', 'username', 'organizationName', 'email'],
+            required: false
+          }]
+        }
       ]
     });
-    
+
     res.status(201).json({
       success: true,
       message: 'Proyecto creado exitosamente',
-      data: completeProject
+      data: {
+        project: completeProject,
+        tasksCreated: createdTasks.length
+      }
     });
+
   } catch (error) {
+    await transaction.rollback();
     console.error('Error creating project:', error);
     res.status(400).json({
       success: false,
@@ -221,7 +296,6 @@ app.post('/api/projects', async (req, res) => {
   }
 });
 
-// Proyecto específico
 app.get('/api/projects/:id', async (req, res) => {
   try {
     const project = await Project.findByPk(req.params.id, {
@@ -229,12 +303,7 @@ app.get('/api/projects/:id', async (req, res) => {
         {
           model: User,
           as: 'creator',
-          attributes: ['id', 'username', 'firstName', 'lastName', 'email']
-        },
-        {
-          model: User,
-          as: 'manager',
-          attributes: ['id', 'username', 'firstName', 'lastName', 'email']
+          attributes: ['id', 'username', 'organizationName', 'email', 'role', 'contactPerson', 'website']
         },
         {
           model: Task,
@@ -242,8 +311,9 @@ app.get('/api/projects/:id', async (req, res) => {
           include: [
             {
               model: User,
-              as: 'assignee',
-              attributes: ['id', 'username', 'firstName', 'lastName']
+              as: 'volunteer',
+              attributes: ['id', 'username', 'organizationName', 'email', 'role'],
+              required: false
             }
           ]
         }
@@ -265,161 +335,78 @@ app.get('/api/projects/:id', async (req, res) => {
     console.error('Error getting project:', error);
     res.status(500).json({
       success: false,
-      message: 'Error obteniendo proyecto',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: 'Error obteniendo proyecto'
     });
   }
 });
 
-// ✅ TAREAS
-app.get('/api/projects/:projectId/tasks', async (req, res) => {
+// ENDPOINT para que una ONG se haga cargo de una tarea
+app.put('/api/tasks/:taskId/take', async (req, res) => {
   try {
-    const { projectId } = req.params;
-    const { status, assignedTo } = req.query;
-    
-    const where = { projectId };
-    if (status) where.status = status;
-    if (assignedTo) where.assignedTo = assignedTo;
-    
-    const tasks = await Task.findAll({
-      where,
+    const { taskId } = req.params;
+    const { ongId } = req.body;
+
+    if (!ongId) {
+      return res.status(400).json({
+        success: false,
+        message: 'ongId es requerido'
+      });
+    }
+
+    const task = await Task.findByPk(taskId);
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Tarea no encontrada'
+      });
+    }
+
+    if (task.takenBy) {
+      return res.status(400).json({
+        success: false,
+        message: 'Esta tarea ya está tomada por otra ONG'
+      });
+    }
+
+    const ong = await User.findByPk(ongId);
+    if (!ong) {
+      return res.status(404).json({
+        success: false,
+        message: 'ONG no encontrada'
+      });
+    }
+
+    await task.update({ 
+      takenBy: ongId,
+      status: 'in_progress'
+    });
+
+    const updatedTask = await Task.findByPk(taskId, {
       include: [
         {
           model: User,
-          as: 'assignee',
-          attributes: ['id', 'username', 'firstName', 'lastName']
-        },
-        {
-          model: User,
-          as: 'taskCreator',
-          attributes: ['id', 'username', 'firstName', 'lastName']
-        },
-        {
-          model: Project,
-          as: 'project',
-          attributes: ['id', 'name']
+          as: 'volunteer',
+          attributes: ['id', 'username', 'organizationName', 'email']
         }
-      ],
-      order: [['createdAt', 'DESC']]
-    });
-    
-    res.json({
-      success: true,
-      data: tasks,
-      total: tasks.length
-    });
-  } catch (error) {
-    console.error('Error getting tasks:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error obteniendo tareas',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-app.post('/api/projects/:projectId/tasks', async (req, res) => {
-  try {
-    const { projectId } = req.params;
-    const {
-      title,
-      description,
-      priority = 'medium',
-      dueDate,
-      estimatedHours,
-      assignedTo,
-      createdBy,
-      tags = []
-    } = req.body;
-    
-    const task = await Task.create({
-      title,
-      description,
-      priority,
-      dueDate,
-      estimatedHours,
-      assignedTo,
-      createdBy,
-      projectId,
-      tags
-    });
-    
-    // Obtener tarea completa con relaciones
-    const completeTask = await Task.findByPk(task.id, {
-      include: [
-        { model: User, as: 'assignee', attributes: ['id', 'username', 'firstName', 'lastName'] },
-        { model: User, as: 'taskCreator', attributes: ['id', 'username', 'firstName', 'lastName'] },
-        { model: Project, as: 'project', attributes: ['id', 'name'] }
       ]
     });
-    
-    res.status(201).json({
-      success: true,
-      message: 'Tarea creada exitosamente',
-      data: completeTask
-    });
-  } catch (error) {
-    console.error('Error creating task:', error);
-    res.status(400).json({
-      success: false,
-      message: 'Error creando tarea',
-      error: error.message
-    });
-  }
-});
 
-// 📊 ESTADÍSTICAS
-app.get('/api/stats', async (req, res) => {
-  try {
-    const stats = await Promise.all([
-      User.count(),
-      Project.count(),
-      Task.count(),
-      Project.count({ where: { status: 'active' } }),
-      Task.count({ where: { status: 'todo' } }),
-      Task.count({ where: { status: 'done' } })
-    ]);
-    
     res.json({
       success: true,
-      data: {
-        totalUsers: stats[0],
-        totalProjects: stats[1],
-        totalTasks: stats[2],
-        activeProjects: stats[3],
-        pendingTasks: stats[4],
-        completedTasks: stats[5]
-      }
+      message: `${ong.organizationName} se hará cargo de la tarea`,
+      data: updatedTask
     });
+
   } catch (error) {
-    console.error('Error getting stats:', error);
+    console.error('Error taking task:', error);
     res.status(500).json({
       success: false,
-      message: 'Error obteniendo estadísticas'
+      message: 'Error asignándose a la tarea'
     });
   }
 });
 
-// 🚫 404 Handler
-app.use('*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    message: `Ruta ${req.originalUrl} no encontrada`,
-    availableEndpoints: [
-      'GET /health',
-      'GET /api/users',
-      'POST /api/users',
-      'GET /api/projects',
-      'POST /api/projects',
-      'GET /api/projects/:id',
-      'GET /api/projects/:projectId/tasks',
-      'POST /api/projects/:projectId/tasks',
-      'GET /api/stats'
-    ]
-  });
-});
-
-// ❌ Error Handler Global
+// Error Handler Global
 app.use((error, req, res, next) => {
   console.error('Global Error:', error);
   res.status(error.status || 500).json({
@@ -429,13 +416,13 @@ app.use((error, req, res, next) => {
   });
 });
 
-// 🚀 INICIAR SERVIDOR
+// INICIAR SERVIDOR
 const startServer = async () => {
   try {
     console.log('🔄 Iniciando servidor...');
     
-    // Sincronizar base de datos
-    const dbSynced = await syncDatabase();
+    // Sincronizar base de datos con force para aplicar cambios del modelo
+    const dbSynced = await syncDatabase({ force: true });
     if (!dbSynced) {
       throw new Error('No se pudo sincronizar la base de datos');
     }
@@ -458,9 +445,7 @@ const startServer = async () => {
       console.log('  - GET  /api/projects');
       console.log('  - POST /api/projects');
       console.log('  - GET  /api/projects/:id');
-      console.log('  - GET  /api/projects/:projectId/tasks');
-      console.log('  - POST /api/projects/:projectId/tasks');
-      console.log('  - GET  /api/stats');
+      console.log('  - PUT  /api/tasks/:taskId/take');
     });
   } catch (error) {
     console.error('❌ Error iniciando servidor:', error.message);

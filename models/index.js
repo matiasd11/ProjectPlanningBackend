@@ -5,8 +5,6 @@ const User = require('./User');
 const Project = require('./Project');
 const Task = require('./Task');
 
-// Definir RELACIONES
-// 👇 Aquí está la magia de las relaciones 1:N
 
 // 🔹 1. User tiene muchos Projects (como creador)
 User.hasMany(Project, {
@@ -21,20 +19,7 @@ Project.belongsTo(User, {
   onDelete: 'RESTRICT'
 });
 
-// 🔹 2. User puede manejar muchos Projects (como manager)
-User.hasMany(Project, {
-  foreignKey: 'managerId',
-  as: 'managedProjects',
-  onDelete: 'SET NULL' // Si elimino manager, proyecto queda sin manager
-});
-
-Project.belongsTo(User, {
-  foreignKey: 'managerId',
-  as: 'manager',
-  onDelete: 'SET NULL'
-});
-
-// 🔹 3. Project tiene muchas Tasks
+// 🔹 2. Project tiene muchas Tasks
 Project.hasMany(Task, {
   foreignKey: 'projectId',
   as: 'tasks',
@@ -47,20 +32,20 @@ Task.belongsTo(Project, {
   onDelete: 'CASCADE'
 });
 
-// 🔹 4. User tiene muchas Tasks asignadas
+// 🔹 3. User puede tomar muchas Tasks (voluntariamente)
 User.hasMany(Task, {
-  foreignKey: 'assignedTo',
-  as: 'assignedTasks',
+  foreignKey: 'takenBy',
+  as: 'takenTasks',
   onDelete: 'SET NULL'
 });
 
 Task.belongsTo(User, {
-  foreignKey: 'assignedTo',
-  as: 'assignee',
+  foreignKey: 'takenBy',
+  as: 'volunteer',
   onDelete: 'SET NULL'
 });
 
-// 🔹 5. User crea muchas Tasks
+// 🔹 4. User crea muchas Tasks
 User.hasMany(Task, {
   foreignKey: 'createdBy',
   as: 'createdTasks',
@@ -116,98 +101,111 @@ const closeConnection = async () => {
 // Función para poblar datos de prueba
 const seedData = async () => {
   try {
-    // Crear usuarios de prueba
+    // Crear usuarios de prueba (ONGs)
     const adminUser = await User.findOrCreate({
       where: { username: 'admin' },
       defaults: {
         username: 'admin',
         email: 'admin@project.com',
         password: 'admin123',
-        firstName: 'Admin',
-        lastName: 'User',
-        role: 'admin'
+        organizationName: 'Administración del Sistema',
+        description: 'Usuario administrador del sistema de gestión de proyectos',
+        role: 'admin',
+        contactPerson: 'Admin User'
       }
     });
 
-    const managerUser = await User.findOrCreate({
-      where: { username: 'manager' },
+    const ongAmbiental = await User.findOrCreate({
+      where: { username: 'ong-verde' },
       defaults: {
-        username: 'manager',
-        email: 'manager@project.com',
-        password: 'manager123',
-        firstName: 'Project',
-        lastName: 'Manager',
-        role: 'manager'
+        username: 'ong-verde',
+        email: 'contacto@ongverde.org',
+        password: 'verde123',
+        organizationName: 'ONG Verde Futuro',
+        description: 'Organización dedicada a la protección del medio ambiente y sostenibilidad',
+        website: 'https://ongverde.org',
+        contactPerson: 'María González',
+        phone: '+54-11-1234-5678',
+        role: 'ong'
       }
     });
 
-    const regularUser = await User.findOrCreate({
-      where: { username: 'developer' },
+    const ongSocial = await User.findOrCreate({
+      where: { username: 'ayuda-social' },
       defaults: {
-        username: 'developer',
-        email: 'dev@project.com',
-        password: 'dev123',
-        firstName: 'John',
-        lastName: 'Developer',
-        role: 'user'
+        username: 'ayuda-social',
+        email: 'info@ayudasocial.org',
+        password: 'social123',
+        organizationName: 'Fundación Ayuda Social',
+        description: 'Fundación dedicada a la ayuda social y desarrollo comunitario',
+        website: 'https://ayudasocial.org',
+        contactPerson: 'Carlos Rodríguez',
+        phone: '+54-11-9876-5432',
+      }
+    });
+
+    const colaborador = await User.findOrCreate({
+      where: { username: 'colaborador-tech' },
+      defaults: {
+        username: 'colaborador-tech',
+        email: 'tech@colaborador.com',
+        password: 'tech123',
+        organizationName: 'Tech Volunteers',
+        description: 'Grupo de voluntarios tecnológicos que colaboran en proyectos de ONGs',
+        website: 'https://techvolunteers.org',
+        contactPerson: 'Ana López',
+        phone: '+54-11-5555-1234',
+        role: 'collaborator'
       }
     });
 
     // Crear proyecto de ejemplo
     const sampleProject = await Project.findOrCreate({
-      where: { name: 'Sistema de Gestión' },
+      where: { name: 'Reforestación Urbana 2025' },
       defaults: {
-        name: 'Sistema de Gestión',
-        description: 'Sistema web para gestión de proyectos y tareas',
+        name: 'Reforestación Urbana 2025',
+        description: 'Proyecto para plantar 1000 árboles en zonas urbanas de Buenos Aires',
         startDate: new Date('2025-01-01'),
         endDate: new Date('2025-12-31'),
-        budget: 100000,
+        budget: 50000,
         currency: 'USD',
         status: 'active',
         priority: 'high',
-        progress: 25,
-        createdBy: adminUser[0].id,
-        managerId: managerUser[0].id,
-        tags: ['web', 'sistema', 'gestión'],
-        metadata: {
-          client: 'Empresa ABC',
-          technology: 'Node.js + React + MySQL'
-        }
+        progress: 15,
+        createdBy: ongAmbiental[0].id
       }
     });
 
     // Crear tareas de ejemplo
     await Task.findOrCreate({
-      where: { title: 'Diseño de base de datos' },
+      where: { title: 'Selección de ubicaciones' },
       defaults: {
-        title: 'Diseño de base de datos',
-        description: 'Crear esquema de BD y relaciones',
+        title: 'Selección de ubicaciones',
+        description: 'Mapear y seleccionar las 50 ubicaciones prioritarias para la plantación',
         status: 'done',
         priority: 'high',
-        dueDate: new Date('2025-01-15'),
-        estimatedHours: 16,
-        actualHours: 12,
+        dueDate: new Date('2025-02-15'),
+        estimatedHours: 20,
+        actualHours: 18,
         projectId: sampleProject[0].id,
-        assignedTo: regularUser[0].id,
-        createdBy: managerUser[0].id,
-        tags: ['backend', 'database']
+        takenBy: colaborador[0].id, // Ya se hizo cargo esta ONG
+        createdBy: ongAmbiental[0].id
       }
     });
 
     await Task.findOrCreate({
-      where: { title: 'API REST development' },
+      where: { title: 'Compra de plantines' },
       defaults: {
-        title: 'API REST development',
-        description: 'Desarrollar endpoints principales',
-        status: 'in_progress',
+        title: 'Compra de plantines',
+        description: 'Adquirir 1000 plantines de especies nativas apropiadas para el clima urbano',
+        status: 'todo', // Disponible para que alguien se haga cargo
         priority: 'high',
-        dueDate: new Date('2025-02-01'),
-        estimatedHours: 40,
-        actualHours: 15,
+        dueDate: new Date('2025-03-01'),
+        estimatedHours: 8,
+        actualHours: 0,
         projectId: sampleProject[0].id,
-        assignedTo: regularUser[0].id,
-        createdBy: managerUser[0].id,
-        tags: ['backend', 'api']
+        takenBy: null, // Nadie se hizo cargo aún
+        createdBy: ongAmbiental[0].id
       }
     });
 

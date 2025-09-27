@@ -62,13 +62,14 @@ const Task = sequelize.define('Task', {
       key: 'id'
     }
   },
-  assignedTo: {
+  takenBy: {
     type: DataTypes.INTEGER,
-    field: 'assigned_to',
+    field: 'taken_by',
     references: {
       model: 'users',
       key: 'id'
-    }
+    },
+    comment: 'ONG que se hace cargo voluntariamente de esta tarea'
   },
   createdBy: {
     type: DataTypes.INTEGER,
@@ -78,17 +79,12 @@ const Task = sequelize.define('Task', {
       model: 'users',
       key: 'id'
     }
-  },
-  // Metadata
-  tags: {
-    type: DataTypes.JSON,
-    defaultValue: []
   }
 }, {
   tableName: 'tasks',
   indexes: [
     { fields: ['project_id'] },
-    { fields: ['assigned_to'] },
+    { fields: ['taken_by'] },
     { fields: ['created_by'] },
     { fields: ['status'] },
     { fields: ['priority'] },

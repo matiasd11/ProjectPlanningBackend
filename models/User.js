@@ -9,13 +9,14 @@ const User = sequelize.define('User', {
     primaryKey: true
   },
   username: {
-    type: DataTypes.STRING(50),
+    type: DataTypes.STRING(100),
     allowNull: false,
     unique: true,
     validate: {
-      len: [3, 50],
+      len: [3, 100],
       notEmpty: true
-    }
+    },
+    comment: 'Nombre de la ONG'
   },
   email: {
     type: DataTypes.STRING(100),
@@ -24,7 +25,8 @@ const User = sequelize.define('User', {
     validate: {
       isEmail: true,
       notEmpty: true
-    }
+    },
+    comment: 'Email de contacto de la ONG'
   },
   password: {
     type: DataTypes.STRING(255),
@@ -33,24 +35,44 @@ const User = sequelize.define('User', {
       len: [6, 255]
     }
   },
-  firstName: {
-    type: DataTypes.STRING(50),
-    field: 'first_name',
+  organizationName: {
+    type: DataTypes.STRING(150),
+    field: 'organization_name',
+    allowNull: false,
     validate: {
-      len: [1, 50]
-    }
+      len: [2, 150],
+      notEmpty: true
+    },
+    comment: 'Nombre oficial de la ONG'
   },
-  lastName: {
-    type: DataTypes.STRING(50),
-    field: 'last_name',
+  description: {
+    type: DataTypes.TEXT,
+    comment: 'Descripción de la ONG y su misión'
+  },
+  website: {
+    type: DataTypes.STRING(255),
     validate: {
-      len: [1, 50]
-    }
+      isUrl: true
+    },
+    comment: 'Sitio web de la ONG'
+  },
+  contactPerson: {
+    type: DataTypes.STRING(100),
+    field: 'contact_person',
+    comment: 'Persona de contacto principal'
+  },
+  phone: {
+    type: DataTypes.STRING(20),
+    validate: {
+      len: [7, 20]
+    },
+    comment: 'Teléfono de contacto'
   },
   role: {
-    type: DataTypes.ENUM('admin', 'manager', 'user'),
-    defaultValue: 'user',
-    allowNull: false
+    type: DataTypes.ENUM('admin', 'ong', 'collaborator'),
+    defaultValue: 'ong',
+    allowNull: false,
+    comment: 'admin: administrador del sistema, ong: organización propietaria, collaborator: colaborador en proyectos'
   },
   isActive: {
     type: DataTypes.BOOLEAN,
@@ -90,9 +112,9 @@ User.prototype.validatePassword = async function(password) {
   return await bcrypt.compare(password, this.password);
 };
 
-// Método para obtener nombre completo
-User.prototype.getFullName = function() {
-  return `${this.firstName || ''} ${this.lastName || ''}`.trim() || this.username;
+// Método para obtener nombre de la organización
+User.prototype.getOrganizationName = function() {
+  return this.organizationName || this.username;
 };
 
 // Método para JSON seguro (sin password)
