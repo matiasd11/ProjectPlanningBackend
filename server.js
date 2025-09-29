@@ -16,8 +16,9 @@ const bonitaRoutes = require('./routes/bonita');
 
 const app = express();
 const PORT = process.env.NODE_DOCKER_PORT || process.env.PORT || 5000;
+const API_VERSION = process.env.API_VERSION || 'v1';
 
-// 🔒 Middlewares de seguridad
+// Middlewares de seguridad
 app.use(helmet());
 
 // Rate limiting
@@ -43,7 +44,7 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-// 🏥 Health check
+// Health check
 app.get('/health', (req, res) => {
   res.json({
     status: 'OK',
@@ -55,11 +56,17 @@ app.get('/health', (req, res) => {
   });
 });
 
-// 📍 RUTAS
-app.use('/api/users', userRoutes);
-app.use('/api/projects', projectRoutes);
-app.use('/api/tasks', taskRoutes);
-app.use('/api/bonita', bonitaRoutes);
+// RUTAS API v1
+const apiRouter = express.Router();
+
+// Montar rutas en el router de API
+apiRouter.use('/users', userRoutes);
+apiRouter.use('/projects', projectRoutes);
+apiRouter.use('/tasks', taskRoutes);
+apiRouter.use('/bonita', bonitaRoutes);
+
+// Montar el router de API con versión
+app.use(`/api/${API_VERSION}`, apiRouter);
 
 // Error Handler Global
 app.use((error, req, res, next) => {
@@ -92,22 +99,22 @@ const startServer = async () => {
     app.listen(PORT, () => {
       console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
       console.log(`📍 Entorno: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🌐 API disponible en: http://localhost:${PORT}`);
+      console.log(`🌐 API disponible en: http://localhost:${PORT}/api/${API_VERSION}`);
       console.log(`🏥 Health check: http://localhost:${PORT}/health`);
       console.log('📊 Endpoints disponibles:');
       console.log('  👥 Usuarios:');
-      console.log('    - GET  /api/users');
-      console.log('    - POST /api/users');
+      console.log(`    - GET  /api/${API_VERSION}/users`);
+      console.log(`    - POST /api/${API_VERSION}/users`);
       console.log('  📋 Proyectos:');
-      console.log('    - GET  /api/projects');
-      console.log('    - POST /api/projects');
-      console.log('    - POST /api/projects/submit-to-bonita');
-      console.log('    - GET  /api/projects/:id');
+      console.log(`    - GET  /api/${API_VERSION}/projects`);
+      console.log(`    - POST /api/${API_VERSION}/projects`);
+      console.log(`    - POST /api/${API_VERSION}/projects/submit-to-bonita`);
+      console.log(`    - GET  /api/${API_VERSION}/projects/:id`);
       console.log('  📝 Tareas:');
-      console.log('    - PUT  /api/tasks/:taskId/take');
+      console.log(`    - PUT  /api/${API_VERSION}/tasks/:taskId/take`);
       console.log('  🚀 Bonita BPM:');
-      console.log('    - GET  /api/bonita/tasks/:userId');
-      console.log('    - POST /api/bonita/tasks/:taskId/complete');
+      console.log(`    - GET  /api/${API_VERSION}/bonita/tasks/:userId`);
+      console.log(`    - POST /api/${API_VERSION}/bonita/tasks/:taskId/complete`);
     });
   } catch (error) {
     console.error('❌ Error iniciando servidor:', error.message);
