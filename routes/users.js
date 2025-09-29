@@ -4,7 +4,7 @@ const { User, Project } = models;
 
 const router = express.Router();
 
-// 👥 GET - Listar usuarios (ONGs)
+// GET - Listar usuarios (ONGs)
 router.get('/', async (req, res) => {
   try {
     const users = await User.findAll({
@@ -32,7 +32,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// 👥 POST - Crear usuario (ONG)
+// POST - Crear usuario (ONG)
 router.post('/', async (req, res) => {
   try {
     const {

@@ -4,7 +4,7 @@ const { User, Task } = models;
 
 const router = express.Router();
 
-// 📝 PUT - Voluntario toma una tarea
+// PUT - Voluntario toma una tarea
 router.put('/:taskId/take', async (req, res) => {
   try {
     const { taskId } = req.params;

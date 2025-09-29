@@ -5,40 +5,56 @@ services:
     image: mysql:8.0
     container_name: project-planning-mysql
     restart: unless-stopped
+    env_file: ./.env
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
-      MYSQL_DATABASE: ${DB_NAME:-projectplanning}
-      MYSQL_USER: ${DB_USER:-projectuser}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-projectpass}
+      MYSQL_ROOT_PASSWORD: $MYSQL_ROOT_PASSWORD
+      MYSQL_DATABASE: $MYSQLDB_DATABASE
+      MYSQL_USER: $MYSQLDB_USER
+      MYSQL_PASSWORD: $MYSQL_ROOT_PASSWORD
     ports:
-      - "${DB_EXTERNAL_PORT:-3306}:3306"
+      - "$MYSQLDB_LOCAL_PORT:$MYSQLDB_DOCKER_PORT"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - project-planning-network
     command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
 
   backend:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NODE_ENV: ${NODE_ENV:-development}
     container_name: project-planning-backend
     restart: unless-stopped
     ports:
-      - "${APP_PORT:-5000}:5000"
+      - "${NODE_LOCAL_PORT:-5000}:${NODE_DOCKER_PORT:-5000}"
+    env_file: ./.env
     environment:
-      NODE_ENV: ${NODE_ENV:-production}
-      PORT: 5000
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: $NODE_DOCKER_PORT
       DB_HOST: mysql
-      DB_USER: ${DB_USER:-projectuser}
-      DB_PASSWORD: ${DB_PASSWORD:-projectpass}
-      DB_NAME: ${DB_NAME:-projectplanning}
-      DB_PORT: 3306
+      DB_USER: $MYSQLDB_USER
+      DB_PASSWORD: $MYSQL_ROOT_PASSWORD
+      DB_NAME: $MYSQLDB_DATABASE
+      DB_PORT: $MYSQLDB_DOCKER_PORT
+    volumes:
+      # Hot reload para desarrollo
+      - .:/app
+      - /app/node_modules
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     networks:
       - project-planning-network
+    stdin_open: true
+    tty: true
+    command: ${DOCKER_COMMAND:-npm run dev}
 
 volumes:
   mysql_data:

@@ -53,7 +53,7 @@ class BonitaService {
     }
   }
 
-  // Obtener la definición del proceso
+  // Obtener la definición del proceso (siempre busca la versión más actual)
   async getProcessDefinition() {
     try {
       if (!this.apiToken) {
@@ -74,7 +74,14 @@ class BonitaService {
       });
 
       if (response.data && response.data.length > 0) {
-        this.processDefinitionId = response.data[0].id;
+        const currentProcessId = response.data[0].id;
+        
+        // Solo log si el process ID cambió
+        if (this.processDefinitionId !== currentProcessId) {
+          console.log('🔄 Process ID actualizado:', this.processDefinitionId, '->', currentProcessId);
+        }
+        
+        this.processDefinitionId = currentProcessId;
         console.log('✅ Proceso encontrado:', response.data[0].name, 'ID:', this.processDefinitionId);
         return response.data[0];
       }
@@ -93,16 +100,28 @@ class BonitaService {
         await this.authenticate();
       }
 
-      if (!this.processDefinitionId) {
-        await this.getProcessDefinition();
-      }
+      // SIEMPRE obtener el process ID más actual antes de crear el caso
+      await this.getProcessDefinition();
 
-      // Preparar las variables para Bonita
-      const bonitaVariables = this.mapProjectDataToBonitaVariables(projectData);
+      // Preparar las variables para Bonita en el formato correcto
+      const variables = this.mapProjectDataToBonitaVariables(projectData);
+      
+      console.log('📤 Enviando variables a Bonita:', JSON.stringify(variables, null, 2));
+
+      // FORMATO CORRECTO para proceso SIN contract: Array de variables
+      const payload = {
+        processDefinitionId: this.processDefinitionId,
+        variables: Object.entries(variables).map(([key, value]) => ({
+          name: key,
+          value: value
+        }))
+      };
+
+      console.log('📦 Payload completo para Bonita:', JSON.stringify(payload, null, 2));
 
       const response = await axios.post(
-        `${this.baseURL}/API/bpm/process/${this.processDefinitionId}/instantiation`,
-        bonitaVariables,
+        `${this.baseURL}/API/bpm/case`,
+        payload,
         {
           headers: {
             'Cookie': this.jsessionId,
@@ -116,14 +135,14 @@ class BonitaService {
       console.log('✅ Proceso iniciado en Bonita, Case ID:', response.data.id || response.data.caseId);
       return response.data;
     } catch (error) {
-      console.error('❌ Error iniciando proceso en Bonita:', error.message);
+      console.error('❌ Error iniciando proceso en Bonita:', error.response?.data || error.message);
       throw error;
     }
   }
 
-  // Mapear datos del proyecto a variables de Bonita (simplificado)
+  // Mapear datos del proyecto a variables de Bonita (formato simple para debugging)
   mapProjectDataToBonitaVariables(projectData) {
-    return {
+    const variables = {
       projectName: projectData.name,
       projectDescription: projectData.description || '',
       startDate: projectData.startDate,
@@ -133,6 +152,9 @@ class BonitaService {
       tasks: JSON.stringify(projectData.tasks || []),
       status: 'pending_approval'
     };
+    
+    console.log('📝 Variables para debugging:', JSON.stringify(variables, null, 2));
+    return variables;
   }
 
   // Obtener tareas pendientes para un usuario/rol
@@ -185,6 +207,136 @@ class BonitaService {
       return response.data;
     } catch (error) {
       console.error('❌ Error completando tarea:', error.message);
+      throw error;
+    }
+  }
+
+  // Obtener todos los casos activos
+  async getAllCases() {
+    try {
+      if (!this.apiToken) {
+        await this.authenticate();
+      }
+
+      const response = await axios.get(`${this.baseURL}/API/bpm/case`, {
+        headers: {
+          'Cookie': this.jsessionId,
+          'X-Bonita-API-Token': this.apiToken,
+          'Content-Type': 'application/json'
+        },
+        params: {
+          p: 0,
+          c: 50,
+          o: 'id DESC'
+        }
+      });
+
+      console.log(`📊 Encontrados ${response.data.length} casos en Bonita`);
+      return response.data || [];
+    } catch (error) {
+      console.error('❌ Error obteniendo casos:', error.message);
+      return [];
+    }
+  }
+
+  // Obtener caso específico por ID
+  async getCaseById(caseId) {
+    try {
+      if (!this.apiToken) {
+        await this.authenticate();
+      }
+
+      const response = await axios.get(`${this.baseURL}/API/bpm/case/${caseId}`, {
+        headers: {
+          'Cookie': this.jsessionId,
+          'X-Bonita-API-Token': this.apiToken,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log(`🔍 Caso ${caseId} encontrado:`, response.data.state);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Error obteniendo caso ${caseId}:`, error.message);
+      throw error;
+    }
+  }
+
+  // Obtener todas las tareas pendientes (sin filtrar por usuario)
+  async getAllPendingTasks() {
+    try {
+      if (!this.apiToken) {
+        await this.authenticate();
+      }
+
+      const response = await axios.get(`${this.baseURL}/API/bpm/humanTask`, {
+        headers: {
+          'Cookie': this.jsessionId,
+          'X-Bonita-API-Token': this.apiToken,
+          'Content-Type': 'application/json'
+        },
+        params: {
+          p: 0,
+          c: 50,
+          o: 'id DESC'
+        }
+      });
+
+      console.log(`📝 Encontradas ${response.data.length} tareas en total`);
+      return response.data || [];
+    } catch (error) {
+      console.error('❌ Error obteniendo todas las tareas:', error.message);
+      return [];
+    }
+  }
+
+  // Obtener variables de un caso específico
+  async getCaseVariables(caseId) {
+    try {
+      if (!this.apiToken) {
+        await this.authenticate();
+      }
+
+      const response = await axios.get(`${this.baseURL}/API/bpm/caseVariable`, {
+        headers: {
+          'Cookie': this.jsessionId,
+          'X-Bonita-API-Token': this.apiToken,
+          'Content-Type': 'application/json'
+        },
+        params: {
+          f: `case_id=${caseId}`,
+          p: 0,
+          c: 50
+        }
+      });
+
+      console.log(`🔍 Variables del caso ${caseId}:`, response.data.length);
+      return response.data || [];
+    } catch (error) {
+      console.error(`❌ Error obteniendo variables del caso ${caseId}:`, error.message);
+      throw error;
+    }
+  }
+
+  // Obtener contexto completo de un caso (lo que ve el formulario)
+  async getCaseContext(caseId) {
+    try {
+      if (!this.apiToken) {
+        await this.authenticate();
+      }
+
+      const response = await axios.get(`${this.baseURL}/API/bpm/case/${caseId}/context`, {
+        headers: {
+          'Cookie': this.jsessionId,
+          'X-Bonita-API-Token': this.apiToken,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log(`🎯 Contexto del caso ${caseId}:`, JSON.stringify(response.data, null, 2));
+      return response.data || {};
+    } catch (error) {
+      console.error(`❌ Error obteniendo contexto del caso ${caseId}:`, error.message);
       throw error;
     }
   }

@@ -5,7 +5,7 @@ const bonitaService = require('../services/bonitaService');
 
 const router = express.Router();
 
-// 📋 GET - Listar proyectos
+// GET - Listar proyectos
 router.get('/', async (req, res) => {
   try {
     const { status, page = 1, limit = 10 } = req.query;
@@ -59,7 +59,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// 📋 GET - Obtener proyecto por ID
+// GET - Obtener proyecto por ID
 router.get('/:id', async (req, res) => {
   try {
     const project = await Project.findByPk(req.params.id, {
@@ -104,124 +104,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// 📋 POST - Crear proyecto simple (sin Bonita)
+// POST - Crear y enviar proyecto a Bonita BPM
 router.post('/', async (req, res) => {
-  const transaction = await sequelize.transaction();
-  
-  try {
-    const {
-      name,
-      description,
-      startDate,
-      endDate,
-      tasks = [],
-      ownerId
-    } = req.body;
-
-    // Validaciones
-    if (!name || !startDate || !endDate || !ownerId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Faltan campos obligatorios: name, startDate, endDate, ownerId'
-      });
-    }
-
-    // Verificar que la ONG existe
-    const owner = await User.findByPk(ownerId);
-    if (!owner) {
-      return res.status(404).json({
-        success: false,
-        message: 'ONG no encontrada'
-      });
-    }
-
-    // Crear el proyecto
-    const project = await Project.create({
-      name,
-      description,
-      startDate: new Date(startDate),
-      endDate: new Date(endDate),
-      status: 'active',
-      progress: 0,
-      createdBy: ownerId
-    }, { transaction });
-
-    // Crear tasks asociadas
-    const createdTasks = [];
-    if (tasks && tasks.length > 0) {
-      for (const taskData of tasks) {
-        const {
-          title,
-          description: taskDescription,
-          dueDate,
-          estimatedHours
-        } = taskData;
-
-        if (!title) {
-          throw new Error(`Task sin título encontrada`);
-        }
-
-        const task = await Task.create({
-          title,
-          description: taskDescription,
-          status: 'todo',
-          dueDate: dueDate ? new Date(dueDate) : null,
-          estimatedHours,
-          actualHours: 0,
-          projectId: project.id,
-          takenBy: null,
-          createdBy: ownerId
-        }, { transaction });
-
-        createdTasks.push(task);
-      }
-    }
-
-    await transaction.commit();
-
-    // Obtener proyecto completo
-    const completeProject = await Project.findByPk(project.id, {
-      include: [
-        { 
-          model: User, 
-          as: 'creator', 
-          attributes: ['id', 'username', 'organizationName', 'email', 'role'] 
-        },
-        {
-          model: Task,
-          as: 'tasks',
-          include: [{
-            model: User,
-            as: 'volunteer',
-            attributes: ['id', 'username', 'organizationName', 'email'],
-            required: false
-          }]
-        }
-      ]
-    });
-
-    res.status(201).json({
-      success: true,
-      message: 'Proyecto creado exitosamente',
-      data: {
-        project: completeProject,
-        tasksCreated: createdTasks.length
-      }
-    });
-
-  } catch (error) {
-    await transaction.rollback();
-    console.error('Error creating project:', error);
-    res.status(400).json({
-      success: false,
-      message: 'Error creando proyecto',
-      error: error.message
-    });
-  }
-});
-
-// 🚀 POST - Enviar proyecto a Bonita BPM
-router.post('/submit-to-bonita', async (req, res) => {
   const transaction = await sequelize.transaction();
   
   try {
@@ -266,7 +150,7 @@ router.post('/submit-to-bonita', async (req, res) => {
     };
 
     // Enviar a Bonita BPM
-    console.log('📤 Enviando proyecto a Bonita BPM...');
+    console.log('Enviando proyecto a Bonita BPM...');
     const bonitaCase = await bonitaService.startProcess(bonitaData);
 
     // Crear proyecto en nuestra BD con referencia a Bonita
