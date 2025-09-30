@@ -43,6 +43,8 @@ services:
       DB_PASSWORD: $MYSQL_ROOT_PASSWORD
       DB_NAME: $MYSQLDB_DATABASE
       DB_PORT: $MYSQLDB_DOCKER_PORT
+      # Bonita connection al host (Bonita Studio)
+      BONITA_URL: http://host.docker.internal:8080/bonita
     volumes:
       # Hot reload para desarrollo
       - .:/app
