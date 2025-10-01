@@ -68,10 +68,10 @@ const sequelize = new Sequelize(config[env]);
 const testConnection = async () => {
   try {
     await sequelize.authenticate();
-    console.log('✅ Conexión a MySQL establecida correctamente.');
+    console.log('Conexión a MySQL establecida correctamente.');
     return true;
   } catch (error) {
-    console.error('❌ Error conectando a MySQL:', error.message);
+    console.error('Error conectando a MySQL:', error.message);
     return false;
   }
 };

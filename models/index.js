@@ -78,12 +78,12 @@ const syncDatabase = async (options = {}) => {
 
     await sequelize.sync({ force, alter });
     
-    console.log('✅ Base de datos sincronizada correctamente');
-    console.log('📊 Modelos disponibles:', Object.keys(sequelize.models));
+    console.log('Base de datos sincronizada correctamente');
+    console.log('Modelos disponibles:', Object.keys(sequelize.models));
     
     return true;
   } catch (error) {
-    console.error('❌ Error sincronizando BD:', error.message);
+    console.error('Error sincronizando BD:', error.message);
     return false;
   }
 };
@@ -92,9 +92,9 @@ const syncDatabase = async (options = {}) => {
 const closeConnection = async () => {
   try {
     await sequelize.close();
-    console.log('✅ Conexión cerrada correctamente');
+    console.log('Conexión cerrada correctamente');
   } catch (error) {
-    console.error('❌ Error cerrando conexión:', error.message);
+    console.error('Error cerrando conexión:', error.message);
   }
 };
 
@@ -201,9 +201,9 @@ const seedData = async () => {
       }
     });
 
-    console.log('✅ Datos de prueba creados correctamente');
+    console.log('Datos de prueba creados correctamente');
   } catch (error) {
-    console.error('❌ Error creando datos de prueba:', error.message);
+    console.error('Error creando datos de prueba:', error.message);
   }
 };
 

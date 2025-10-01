@@ -5,6 +5,266 @@ const bonitaService = require('../services/bonitaService');
 
 const router = express.Router();
 
+// POST - Completar una tarea específica con variables
+router.post('/task/:taskId/complete', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { variables = {} } = req.body;
+    
+    console.log(`Completando tarea ${taskId} con variables específicas`);
+    console.log('Variables recibidas:', JSON.stringify(variables, null, 2));
+    
+    const result = await bonitaService.completeTaskWithVariables(taskId, variables);
+    
+    res.json({
+      success: true,
+      message: 'Tarea completada exitosamente con variables específicas',
+      data: {
+        taskId,
+        variables,
+        result
+      }
+    });
+  } catch (error) {
+    console.error('Error completando tarea con variables:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error completando tarea con variables',
+      error: error.message
+    });
+  }
+});
+
+// GET - Obtener información de un caso específico
+router.get('/case/:caseId', async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    
+    console.log(`Obteniendo información del caso: ${caseId}`);
+
+    // Obtener información del caso
+    const caseInfo = await bonitaService.getCaseById(caseId);
+
+    // Obtener tareas del caso
+    const tasks = await bonitaService.getAllTasksForCase(caseId);
+
+    // Obtener variables del caso
+    const variables = await bonitaService.getCaseVariables(caseId);
+
+    // Formatear variables para mejor legibilidad
+    const formattedVariables = {};
+    variables.forEach(variable => {
+      formattedVariables[variable.name] = {
+        value: variable.value,
+        type: variable.type,
+        description: variable.description || ''
+      };
+    });
+
+    // Preparar resumen
+    const summary = {
+      totalTasks: tasks.length,
+      activeTasks: tasks.filter(t => t.state === 'ready').length,
+      completedTasks: tasks.filter(t => t.state === 'completed').length,
+      variablesCount: variables.length,
+      lastUpdate: caseInfo.last_update_date
+    };
+
+    res.json({
+      success: true,
+      data: {
+        caseId: caseId,
+        tasks: tasks,
+        variables: formattedVariables,
+        summary: summary
+      }
+    });
+
+  } catch (error) {
+    console.error('Error obteniendo información del caso:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Error obteniendo información del caso de Bonita',
+      error: error.message
+    });
+  }
+});
+
+// GET - Obtener todas las tareas pendientes
+router.get('/tasks', async (req, res) => {
+  try {
+    const tasks = await bonitaService.getAllPendingTasks();
+    
+    res.json({
+      success: true,
+      data: tasks,
+      count: tasks.length
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error obteniendo tareas',
+      error: error.message
+    });
+  }
+});
+
+// GET - Obtener tareas de un caso específico
+router.get('/case/:caseId/tasks', async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    console.log(`Obteniendo tareas del caso: ${caseId}`);
+    
+    const tasks = await bonitaService.getAllTasksForCase(caseId);
+    
+    res.json({
+      success: true,
+      data: tasks,
+      count: tasks.length,
+      caseId: caseId
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error obteniendo tareas del caso',
+      error: error.message
+    });
+  }
+});
+
+// GET - Obtener variables de un caso específico  
+router.get('/case/:caseId/variables', async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    console.log(`Obteniendo variables del caso: ${caseId}`);    res.json({
+      success: true,
+      data: caseInfo
+    });
+  } catch (error) {
+    console.error('Error obteniendo información del caso:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error obteniendo información del caso',
+      error: error.message
+    });
+  }
+});
+
+// GET - Obtener solo las tareas de un caso
+router.get('/case/:caseId/tasks', async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    
+    console.log(`Obteniendo tareas del caso: ${caseId}`);
+    
+    const tasks = await bonitaService.getAllTasksForCase(caseId);
+    
+    res.json({
+      success: true,
+      caseId,
+      tasks: tasks.map(task => ({
+        id: task.id,
+        name: task.name,
+        state: task.state,
+        type: task.type,
+        assigned_id: task.assigned_id,
+        priority: task.priority,
+        dueDate: task.dueDate
+      })),
+      count: tasks.length
+    });
+  } catch (error) {
+    console.error('Error obteniendo tareas:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error obteniendo tareas',
+      error: error.message
+    });
+  }
+});
+
+// GET - Obtener solo las variables de un caso
+router.get('/case/:caseId/variables', async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    
+    console.log(`Obteniendo variables del caso: ${caseId}`);
+    
+    const variables = await bonitaService.getCaseVariables(caseId);
+    
+    res.json({
+      success: true,
+      caseId,
+      variables: variables.reduce((acc, variable) => {
+        acc[variable.name] = {
+          value: variable.value,
+          type: variable.type,
+          description: variable.description
+        };
+        return acc;
+      }, {}),
+      variablesList: variables,
+      count: variables.length
+    });
+  } catch (error) {
+    console.error('Error obteniendo variables:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error obteniendo variables',
+      error: error.message
+    });
+  }
+});
+
+// POST - Test auto-completion for a specific case
+router.post('/auto-complete/:caseId', async (req, res) => {
+  try {
+    const { caseId } = req.params;
+    
+    console.log('🔨 Testing auto-completion for case:', caseId);
+    
+    // Get tasks for this case
+    const tasks = await bonitaService.getAllTasksForCase(caseId);
+    console.log('📋 Tasks found:', tasks.map(t => ({ name: t.name, id: t.id, state: t.state })));
+    
+    if (tasks.length > 0) {
+      const taskToComplete = tasks.find(t => t.state === 'ready') || tasks[0];
+      console.log(`⚡ Attempting to complete: ${taskToComplete.name} (ID: ${taskToComplete.id})`);
+      
+      const result = await bonitaService.completeTaskById(taskToComplete.id);
+      
+      // Check final state
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const finalTasks = await bonitaService.getAllTasksForCase(caseId);
+      
+      res.json({
+        success: true,
+        message: 'Auto-completion test completed',
+        data: {
+          caseId,
+          completedTask: { id: taskToComplete.id, name: taskToComplete.name },
+          initialTasks: tasks.map(t => ({ name: t.name, state: t.state })),
+          finalTasks: finalTasks.map(t => ({ name: t.name, state: t.state }))
+        }
+      });
+    } else {
+      res.json({
+        success: false,
+        message: 'No tasks found for auto-completion',
+        data: { caseId, tasks: [] }
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error in auto-completion test:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error testing auto-completion',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Error interno'
+    });
+  }
+});
+
 // GET - Tareas pendientes de Bonita para una ONG
 router.get('/tasks/:userId', async (req, res) => {
   try {

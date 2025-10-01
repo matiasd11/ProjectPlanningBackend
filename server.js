@@ -85,7 +85,7 @@ app.use((error, req, res, next) => {
 // INICIAR SERVIDOR
 const startServer = async () => {
   try {
-    console.log('🔄 Iniciando servidor...');
+    console.log('Iniciando servidor...');
     
     // Sincronizar base de datos con force para aplicar cambios del modelo
     const dbSynced = await syncDatabase({ force: true });
@@ -95,50 +95,51 @@ const startServer = async () => {
     
     // Crear datos de prueba (solo en desarrollo)
     if (process.env.NODE_ENV === 'development') {
-      console.log('🌱 Creando datos de prueba...');
+      console.log('Creando datos de prueba...');
       await seedData();
     }
     
     // Iniciar servidor
     app.listen(PORT, () => {
-      console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
-      console.log(`📍 Entorno: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🌐 API disponible en: http://localhost:${PORT}/api/${API_VERSION}`);
-      console.log(`🏥 Health check: http://localhost:${PORT}/health`);
-      console.log('📊 Endpoints disponibles:');
-      console.log('  👥 Usuarios:');
+      console.log(`Servidor corriendo en puerto ${PORT}`);
+      console.log(`Entorno: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`API disponible en: http://localhost:${PORT}/api/${API_VERSION}`);
+      console.log(`Health check: http://localhost:${PORT}/health`);
+      console.log('Endpoints disponibles:');
+      console.log('  Usuarios:');
       console.log(`    - GET  /api/${API_VERSION}/users`);
       console.log(`    - POST /api/${API_VERSION}/users`);
-      console.log('  📋 Proyectos:');
+      console.log('  Proyectos:');
       console.log(`    - GET  /api/${API_VERSION}/projects`);
       console.log(`    - POST /api/${API_VERSION}/projects`);
       console.log(`    - POST /api/${API_VERSION}/projects/submit-to-bonita`);
       console.log(`    - GET  /api/${API_VERSION}/projects/:id`);
-      console.log('  📝 Tareas:');
+      console.log('  Tareas:');
       console.log(`    - PUT  /api/${API_VERSION}/tasks/:taskId/take`);
-      console.log('  🚀 Bonita BPM:');
+      console.log('  Bonita BPM:');
       console.log(`    - GET  /api/${API_VERSION}/bonita/tasks/:userId`);
       console.log(`    - POST /api/${API_VERSION}/bonita/tasks/:taskId/complete`);
     });
   } catch (error) {
-    console.error('❌ Error iniciando servidor:', error.message);
+    console.error('Error iniciando servidor:', error.message);
     process.exit(1);
   }
 };
 
 // Manejar cierre graceful
-process.on('SIGTERM', async () => {
-  console.log('🔄 Cerrando servidor...');
-  const { closeConnection } = require('./models');
-  await closeConnection();
+const gracefulShutdown = () => {
+  console.log('Iniciando cierre graceful...');
   process.exit(0);
+};
+
+process.on('SIGTERM', () => {
+  console.log('Cerrando servidor...');
+  gracefulShutdown();
 });
 
-process.on('SIGINT', async () => {
-  console.log('🔄 Cerrando servidor...');
-  const { closeConnection } = require('./models');
-  await closeConnection();
-  process.exit(0);
+process.on('SIGINT', () => {
+  console.log('Cerrando servidor...');
+  gracefulShutdown();
 });
 
 // Iniciar
