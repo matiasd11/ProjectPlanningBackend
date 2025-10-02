@@ -74,6 +74,20 @@ const Task = sequelize.define('Task', {
       model: 'users',
       key: 'id'
     }
+  },
+  taskTypeId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    field: 'task_type_id',
+    references: {
+      model: 'task_types',
+      key: 'id'
+    }
+  },
+  isCoverageRequest: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    field: 'is_coverage_request'
   }
 }, {
   tableName: 'tasks',
@@ -81,8 +95,10 @@ const Task = sequelize.define('Task', {
     { fields: ['project_id'] },
     { fields: ['taken_by'] },
     { fields: ['created_by'] },
+    { fields: ['task_type_id'] },
     { fields: ['status'] },
-    { fields: ['due_date'] }
+    { fields: ['due_date'] },
+    { fields: ['is_coverage_request'] }
   ]
 });
 

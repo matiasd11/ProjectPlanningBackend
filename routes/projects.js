@@ -1,6 +1,6 @@
 const express = require('express');
 const { models, sequelize } = require('../models');
-const { User, Project, Task } = models;
+const { User, Project, Task, TaskType } = models;
 const bonitaService = require('../services/bonitaService');
 
 const router = express.Router();
@@ -27,12 +27,20 @@ router.get('/', async (req, res) => {
           model: Task,
           as: 'tasks',
           attributes: ['id', 'title', 'status'],
-          include: [{
-            model: User,
-            as: 'volunteer',
-            attributes: ['id', 'username', 'organizationName'],
-            required: false
-          }]
+          include: [
+            {
+              model: User,
+              as: 'volunteer',
+              attributes: ['id', 'username', 'organizationName'],
+              required: false
+            },
+            {
+              model: TaskType,
+              as: 'taskType',
+              attributes: ['id', 'title'],
+              required: false
+            }
+          ]
         }
       ],
       limit: parseInt(limit),
@@ -252,7 +260,9 @@ router.post('/', async (req, res) => {
           title,
           description: taskDescription,
           dueDate,
-          estimatedHours
+          estimatedHours,
+          taskTypeId,
+          isCoverageRequest
         } = taskData;
 
         if (!title) {
@@ -268,7 +278,9 @@ router.post('/', async (req, res) => {
           actualHours: 0,
           projectId: project.id,
           takenBy: null,
-          createdBy: ownerId
+          createdBy: ownerId,
+          taskTypeId,
+          isCoverageRequest
         }, { transaction });
 
         createdTasks.push(task);

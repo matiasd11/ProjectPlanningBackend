@@ -12,6 +12,7 @@ const { syncDatabase, seedData } = require('./models');
 const userRoutes = require('./routes/users');
 const projectRoutes = require('./routes/projects');
 const taskRoutes = require('./routes/tasks');
+const taskTypeRoutes = require('./routes/taskTypes');
 const bonitaRoutes = require('./routes/bonita');
 
 const app = express();
@@ -67,6 +68,7 @@ const apiRouter = express.Router();
 apiRouter.use('/users', userRoutes);
 apiRouter.use('/projects', projectRoutes);
 apiRouter.use('/tasks', taskRoutes);
+apiRouter.use('/task-types', taskTypeRoutes);
 apiRouter.use('/bonita', bonitaRoutes);
 
 // Montar el router de API con versión

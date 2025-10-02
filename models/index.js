@@ -4,6 +4,7 @@ const { sequelize, testConnection } = require('../config/database');
 const User = require('./User');
 const Project = require('./Project');
 const Task = require('./Task');
+const TaskType = require('./TaskType');
 
 
 // 🔹 1. User tiene muchos Projects (como creador)
@@ -55,6 +56,19 @@ User.hasMany(Task, {
 Task.belongsTo(User, {
   foreignKey: 'createdBy',
   as: 'taskCreator',
+  onDelete: 'RESTRICT'
+});
+
+// 🔹 5. TaskType tiene muchas Tasks
+TaskType.hasMany(Task, {
+  foreignKey: 'taskTypeId',
+  as: 'tasks',
+  onDelete: 'RESTRICT' // No permitir eliminar tipo de tarea si tiene tareas asociadas
+});
+
+Task.belongsTo(TaskType, {
+  foreignKey: 'taskTypeId',
+  as: 'taskType',
   onDelete: 'RESTRICT'
 });
 
@@ -156,6 +170,27 @@ const seedData = async () => {
       }
     });
 
+    // Crear tipos de tarea
+    const tipoEconomico = await TaskType.findOrCreate({
+      where: { title: 'Económico' },
+      defaults: { title: 'Económico' }
+    });
+
+    const tipoMateriales = await TaskType.findOrCreate({
+      where: { title: 'Materiales' },
+      defaults: { title: 'Materiales' }
+    });
+
+    const tipoManoObra = await TaskType.findOrCreate({
+      where: { title: 'Mano de obra' },
+      defaults: { title: 'Mano de obra' }
+    });
+
+    const tipoLogistico = await TaskType.findOrCreate({
+      where: { title: 'Logístico' },
+      defaults: { title: 'Logístico' }
+    });
+
     // Crear proyecto de ejemplo
     const sampleProject = await Project.findOrCreate({
       where: { name: 'Reforestación Urbana 2025' },
@@ -182,7 +217,8 @@ const seedData = async () => {
         actualHours: 18,
         projectId: sampleProject[0].id,
         takenBy: colaborador[0].id, // Ya se hizo cargo esta ONG
-        createdBy: ongAmbiental[0].id
+        createdBy: ongAmbiental[0].id,
+        taskTypeId: tipoEconomico[0].id
       }
     });
 
@@ -197,7 +233,8 @@ const seedData = async () => {
         actualHours: 0,
         projectId: sampleProject[0].id,
         takenBy: null, // Nadie se hizo cargo aún
-        createdBy: ongAmbiental[0].id
+        createdBy: ongAmbiental[0].id,
+        taskTypeId: tipoMateriales[0].id
       }
     });
 
@@ -213,7 +250,8 @@ module.exports = {
   models: {
     User,
     Project,
-    Task
+    Task,
+    TaskType
   },
   syncDatabase,
   closeConnection,
