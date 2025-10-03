@@ -132,24 +132,6 @@ router.get('/case/:caseId/tasks', async (req, res) => {
   }
 });
 
-// GET - Obtener variables de un caso específico  
-router.get('/case/:caseId/variables', async (req, res) => {
-  try {
-    const { caseId } = req.params;
-    console.log(`Obteniendo variables del caso: ${caseId}`);    res.json({
-      success: true,
-      data: caseInfo
-    });
-  } catch (error) {
-    console.error('Error obteniendo información del caso:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error obteniendo información del caso',
-      error: error.message
-    });
-  }
-});
-
 // GET - Obtener solo las tareas de un caso
 router.get('/case/:caseId/tasks', async (req, res) => {
   try {
