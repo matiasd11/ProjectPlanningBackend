@@ -1,8 +1,11 @@
 const express = require('express');
 const { models } = require('../models');
 const { User, Project } = models;
+const { secret, expiresIn } = require('../config/jwt');
 
 const router = express.Router();
+
+const jwt = require('jsonwebtoken');
 
 // GET - Listar usuarios (ONGs)
 router.get('/', async (req, res) => {
@@ -45,7 +48,7 @@ router.post('/', async (req, res) => {
       phone,
       role = 'ong'
     } = req.body;
-    
+
     const user = await User.create({
       username,
       email,
@@ -56,7 +59,7 @@ router.post('/', async (req, res) => {
       phone,
       role
     });
-    
+
     res.status(201).json({
       success: true,
       message: 'ONG registrada exitosamente',
@@ -69,6 +72,39 @@ router.post('/', async (req, res) => {
       message: 'Error creando usuario',
       error: error.message
     });
+  }
+});
+
+
+// POST /users/login
+router.post('/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password)
+      return res.status(400).json({ message: 'Usuario y contraseña requeridos' });
+
+    const user = await User.findOne({ where: { username } });
+
+    if (!user)
+      return res.status(401).json({ message: 'Usuario o contraseña incorrectos' });
+
+    const isMatch = await user.validatePassword(password);
+    if (!isMatch)
+      return res.status(401).json({ message: 'Usuario o contraseña incorrectos' });
+
+    // Generar token JWT
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role },
+      secret,
+      { expiresIn }
+    );
+
+    res.json({ token, user: user.toSafeJSON() });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error interno del servidor' });
   }
 });
 
