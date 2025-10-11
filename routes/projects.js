@@ -195,6 +195,7 @@ router.post('/', async (req, res) => {
       status: 'pending_approval',
       progress: 0,
       createdBy: ownerId
+      // NO bonitaCaseId porque el proyecto no va a Bonita
     }, { transaction });
 
     console.log('💾 Proyecto guardado en BD local:', project.id);
@@ -237,7 +238,7 @@ router.post('/', async (req, res) => {
           takenBy: null,
           createdBy: ownerId,
           taskTypeId: taskTypeId || 1,
-          isCoverageRequest: false // SIEMPRE false para tareas locales
+          isCoverageRequest: false
         }, { transaction });
 
         createdLocalTasks.push(task);
@@ -245,69 +246,73 @@ router.post('/', async (req, res) => {
       console.log('💾 Tareas locales guardadas en BD:', createdLocalTasks.length);
     }
 
-    // 4. ENVIAR COVERAGE REQUESTS A BONITA
+    // 4. ENVIAR TODAS LAS COVERAGE REQUESTS EN UN SOLO CASO ÚNICO
     const bonitaCoverageRequests = [];
     if (coverageRequestTasks.length > 0) {
-      console.log('🚀 Enviando Coverage Requests a Bonita...');
+      console.log('🚀 Enviando TODAS las Coverage Requests en UN SOLO CASO de Bonita...');
       
-      for (const taskData of coverageRequestTasks) {
-        const {
-          title,
-          description: taskDescription,
-          dueDate,
-          estimatedHours,
-          urgencyLevel = 'medium',
-          requiredSkills = [],
-          taskTypeId
-        } = taskData;
-
-        if (!title) {
-          throw new Error(`Coverage Request sin título encontrada`);
-        }
-
-        try {
-          // Preparar datos para Bonita Coverage Request
-          const coverageRequestData = {
-            title,
-            description: taskDescription,
+      try {
+        // Preparar datos para el caso único
+        const batchData = {
+          projectId: project.id,
+          totalRequests: coverageRequestTasks.length,
+          coverageRequests: coverageRequestTasks.map(task => ({
+            title: task.title,
+            description: task.description || '',
+            estimatedHours: task.estimatedHours || 0,
+            dueDate: task.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            urgencyLevel: task.urgencyLevel || 'medium',
+            requiredSkills: task.requiredSkills || [],
+            taskTypeId: task.taskTypeId || 1,
             projectId: project.id,
-            estimatedHours: estimatedHours || 0,
-            dueDate: dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            urgencyLevel,
-            requiredSkills,
-            taskTypeId: taskTypeId || 1,
-            createdBy: ownerId,
-            isCoverageRequest: true
-          };
+            isCoverageRequest: true,
+            source: "bonita_batch_process"
+          })),
+          createdBy: ownerId
+        };
 
-          console.log('📤 Enviando Coverage Request a Bonita:', title);
-          
-          // Enviar a Bonita usando el método específico para coverage requests
-          const bonitaCase = await bonitaService.startCoverageRequestProcess(coverageRequestData);
-          
-          bonitaCoverageRequests.push({
-            title,
-            bonitaCaseId: bonitaCase.id,
-            processType: 'coverage_request'
-          });
+        console.log('📦 Datos del caso único:', {
+          projectId: batchData.projectId,
+          totalRequests: batchData.totalRequests,
+          requestTitles: coverageRequestTasks.map(t => t.title)
+        });
 
-          console.log('✅ Coverage Request enviado a Bonita:', {
-            title,
-            caseId: bonitaCase.id
-          });
+        // Crear UN SOLO caso en Bonita para todas las coverage requests
+        const bonitaBatchCase = await bonitaService.startBatchCoverageRequestProcess(batchData);
+        const batchCaseId = bonitaBatchCase.id || bonitaBatchCase.caseId;
 
-        } catch (bonitaError) {
-          console.error('❌ Error enviando Coverage Request a Bonita:', {
-            title,
-            error: bonitaError.message
-          });
-          // No fallar todo el proceso si una coverage request falla
-          bonitaCoverageRequests.push({
-            title,
-            error: bonitaError.message,
-            processType: 'coverage_request_failed'
-          });
-        }
+        console.log('✅ Caso único creado en Bonita:', batchCaseId);
+
+        // Completar automáticamente la primera tarea del caso único
+        console.log('⚡ Completando automáticamente la primera tarea del caso único...');
+        const autoCompleted = await bonitaService.autoCompleteBatchFirstTask(batchCaseId);
+
+        // Actualizar proyecto con referencia al caso único
+        await project.update({
+          bonita_case_id: batchCaseId
+        }, { transaction });
+
+        bonitaCoverageRequests.push({
+          batchCaseId: batchCaseId,
+          totalRequests: coverageRequestTasks.length,
+          requestTitles: coverageRequestTasks.map(t => t.title),
+          processType: 'batch_coverage_requests',
+          firstTaskCompleted: autoCompleted
+        });
+
+        console.log('✅ Caso único procesado completamente:', {
+          caseId: batchCaseId,
+          totalRequests: coverageRequestTasks.length,
+          autoCompleted
+        });
+
+      } catch (bonitaError) {
+        console.error('❌ Error enviando caso único a Bonita:', bonitaError.message);
+        bonitaCoverageRequests.push({
+          error: bonitaError.message,
+          processType: 'batch_coverage_requests_failed',
+          firstTaskCompleted: false
+        });
       }
     }
 
@@ -316,11 +321,12 @@ router.post('/', async (req, res) => {
     // 5. RESPUESTA COMPLETA
     res.status(201).json({
       success: true,
-      message: 'Proyecto creado exitosamente con separación de tareas',
+      message: 'Proyecto creado exitosamente con caso único',
       data: {
         project: {
           ...project.toJSON(),
-          creator: owner
+          creator: owner,
+          bonita_case_id: project.bonita_case_id // Referencia al caso único
         },
         localTasks: {
           count: createdLocalTasks.length,
@@ -336,18 +342,23 @@ router.post('/', async (req, res) => {
           successful: bonitaCoverageRequests.filter(cr => !cr.error).length,
           failed: bonitaCoverageRequests.filter(cr => cr.error).length,
           requests: bonitaCoverageRequests.map(cr => ({
-            title: cr.title,
-            bonitaCaseId: cr.bonitaCaseId,
-            status: cr.error ? 'failed' : 'sent_to_bonita',
+            batchCaseId: cr.batchCaseId,
+            totalRequests: cr.totalRequests,
+            requestTitles: cr.requestTitles,
+            status: cr.error ? 'failed' : 'sent_to_bonita_batch',
             error: cr.error,
-            storageLocation: 'bonita_bpm'
+            firstTaskCompleted: cr.firstTaskCompleted || false,
+            storageLocation: 'bonita_bmp_single_case'
           }))
         },
         summary: {
           totalTasksProcessed: tasks.length,
           savedToDatabase: createdLocalTasks.length,
           sentToBonita: bonitaCoverageRequests.filter(cr => !cr.error).length,
-          processingErrors: bonitaCoverageRequests.filter(cr => cr.error).length
+          processingErrors: bonitaCoverageRequests.filter(cr => cr.error).length,
+          coverageRequestsAutoCompleted: bonitaCoverageRequests.filter(cr => cr.firstTaskCompleted).length,
+          projectHasSingleBonitaCase: true, // Un solo caso para todas las coverage requests
+          batchCoverageRequests: true // Coverage requests en batch
         }
       }
     });
