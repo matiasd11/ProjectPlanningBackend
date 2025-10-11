@@ -1,10 +1,97 @@
 const express = require('express');
 const { models } = require('../models');
 const { User, Task } = models;
+const bonitaService = require('../services/bonitaService');
 
 const router = express.Router();
 
-// PUT - Voluntario toma una tarea
+// GET - Obtener estado de coverage request en Bonita
+router.get('/coverage-request/:caseId/status', async (req, res) => {
+  try {
+    const { caseId } = req.params;
+
+    // Obtener información del caso en Bonita
+    const caseInfo = await bonitaService.getCaseById(caseId);
+    const tasks = await bonitaService.getAllTasksForCase(caseId);
+
+    res.json({
+      success: true,
+      data: {
+        caseId,
+        state: caseInfo.state,
+        currentTasks: tasks.filter(t => t.state === 'ready').map(t => ({
+          id: t.id,
+          name: t.name,
+          state: t.state
+        })),
+        completedTasks: tasks.filter(t => t.state === 'completed').length,
+        totalTasks: tasks.length,
+        processType: 'coverage_request'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error obteniendo estado de coverage request:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error obteniendo estado de coverage request',
+      error: error.message
+    });
+  }
+});
+
+// GET - Listar tareas locales (de la BD)
+router.get('/local', async (req, res) => {
+  try {
+    const { projectId, status, page = 1, limit = 10 } = req.query;
+    
+    const where = { isCoverageRequest: false }; // Solo tareas locales
+    if (projectId) where.projectId = projectId;
+    if (status) where.status = status;
+    
+    const offset = (page - 1) * limit;
+    
+    const { count, rows } = await Task.findAndCountAll({
+      where,
+      include: [
+        {
+          model: User,
+          as: 'assignee',
+          attributes: ['id', 'username', 'organizationName'],
+          required: false
+        },
+        {
+          model: User,
+          as: 'taskCreator',
+          attributes: ['id', 'username', 'organizationName']
+        }
+      ],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      order: [['created_at', 'DESC']]
+    });
+    
+    res.json({
+      success: true,
+      data: rows,
+      pagination: {
+        total: count,
+        page: parseInt(page),
+        pages: Math.ceil(count / limit),
+        limit: parseInt(limit)
+      },
+      filter: { onlyLocalTasks: true }
+    });
+  } catch (error) {
+    console.error('Error getting local tasks:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error obteniendo tareas locales'
+    });
+  }
+});
+
+// PUT - Voluntario toma una tarea local
 router.put('/:taskId/take', async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -22,6 +109,14 @@ router.put('/:taskId/take', async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Tarea no encontrada'
+      });
+    }
+
+    // Solo permitir tomar tareas locales
+    if (task.isCoverageRequest) {
+      return res.status(400).json({
+        success: false,
+        message: 'Esta tarea es un Coverage Request, se gestiona a través de Bonita'
       });
     }
 

@@ -145,7 +145,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST - Crear y enviar proyecto a Bonita BPM
+// POST - Crear proyecto y manejar tareas según isCoverageRequest
 router.post('/', async (req, res) => {
   const transaction = await sequelize.transaction();
   
@@ -179,68 +179,14 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Preparar datos para Bonita
-    const bonitaData = {
-      name,
-      description,
-      startDate,
-      endDate,
-      tasks,
-      ownerId,
-      organizationName: owner.organizationName
-    };
+    console.log('🚀 Procesando proyecto con tareas:', {
+      projectName: name,
+      totalTasks: tasks.length,
+      coverageRequests: tasks.filter(t => t.isCoverageRequest === true).length,
+      localTasks: tasks.filter(t => t.isCoverageRequest !== true).length
+    });
 
-    // Enviar a Bonita BPM
-    console.log('Enviando proyecto a Bonita BPM...');
-    const bonitaCase = await bonitaService.startProcess(bonitaData);
-    const caseId = bonitaCase.id || bonitaCase.caseId;
-
-    // Completar automáticamente la primera tarea de registro
-    console.log('Completando automáticamente la primera tarea...');
-    try {
-      // Esperar un momento para que la tarea esté disponible
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Obtener tareas pendientes del caso recién creado (con reintentos)
-      let pendingTasks = [];
-      let attempts = 0;
-      const maxAttempts = 3;
-      
-      while (attempts < maxAttempts && pendingTasks.length === 0) {
-        attempts++;
-        console.log(`Intento ${attempts} de obtener tareas del caso ${caseId}`);
-        pendingTasks = await bonitaService.getAllTasksForCase(caseId);
-        
-        if (pendingTasks.length === 0 && attempts < maxAttempts) {
-          console.log('No se encontraron tareas, esperando 500ms antes del siguiente intento...');
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      }
-      
-      if (pendingTasks && pendingTasks.length > 0) {
-        const firstTask = pendingTasks[0];
-        console.log(`Completando tarea: ${firstTask.name} (ID: ${firstTask.id})`);
-        
-        // Variables para completar la primera tarea (formulario de registro)
-        const taskVariables = {
-          proyecto_registrado: true,
-          fecha_registro: new Date().toISOString().split('T')[0],
-          registrador: "Sistema Automatizado",
-          comentarios_registro: "Proyecto registrado automáticamente desde el frontend",
-          validacion_datos: true
-        };
-        
-        await bonitaService.completeTaskWithVariables(firstTask.id, taskVariables);
-        console.log('Primera tarea completada automáticamente');
-      } else {
-        console.log(`No se encontraron tareas para completar después de ${maxAttempts} intentos`);
-      }
-    } catch (autoCompleteError) {
-      console.warn('No se pudo completar automáticamente la primera tarea:', autoCompleteError.message);
-      // No fallar todo el proceso si no se puede completar la tarea
-    }
-
-    // Crear proyecto en nuestra BD con referencia a Bonita
+    // 1. CREAR PROYECTO EN BD LOCAL (siempre se guarda)
     const project = await Project.create({
       name,
       description,
@@ -248,25 +194,35 @@ router.post('/', async (req, res) => {
       endDate: new Date(endDate),
       status: 'pending_approval',
       progress: 0,
-      createdBy: ownerId,
-      bonitaCaseId: caseId
+      createdBy: ownerId
     }, { transaction });
 
-    // Crear tasks asociadas
-    const createdTasks = [];
-    if (tasks && tasks.length > 0) {
-      for (const taskData of tasks) {
+    console.log('💾 Proyecto guardado en BD local:', project.id);
+
+    // 2. SEPARAR TAREAS SEGÚN isCoverageRequest
+    const localTasks = tasks.filter(task => task.isCoverageRequest !== true);
+    const coverageRequestTasks = tasks.filter(task => task.isCoverageRequest === true);
+
+    console.log('📋 Tareas separadas:', {
+      localTasks: localTasks.length,
+      coverageRequests: coverageRequestTasks.length
+    });
+
+    // 3. GUARDAR TAREAS LOCALES EN BD
+    const createdLocalTasks = [];
+    if (localTasks.length > 0) {
+      for (const taskData of localTasks) {
         const {
           title,
           description: taskDescription,
           dueDate,
           estimatedHours,
           taskTypeId,
-          isCoverageRequest
+          priority = 'medium'
         } = taskData;
 
         if (!title) {
-          throw new Error(`Task sin título encontrada`);
+          throw new Error(`Tarea local sin título encontrada`);
         }
 
         const task = await Task.create({
@@ -274,61 +230,135 @@ router.post('/', async (req, res) => {
           description: taskDescription,
           status: 'todo',
           dueDate: dueDate ? new Date(dueDate) : null,
-          estimatedHours,
+          estimatedHours: estimatedHours || 0,
           actualHours: 0,
+          priority,
           projectId: project.id,
           takenBy: null,
           createdBy: ownerId,
-          taskTypeId,
-          isCoverageRequest
+          taskTypeId: taskTypeId || 1,
+          isCoverageRequest: false // SIEMPRE false para tareas locales
         }, { transaction });
 
-        createdTasks.push(task);
+        createdLocalTasks.push(task);
+      }
+      console.log('💾 Tareas locales guardadas en BD:', createdLocalTasks.length);
+    }
+
+    // 4. ENVIAR COVERAGE REQUESTS A BONITA
+    const bonitaCoverageRequests = [];
+    if (coverageRequestTasks.length > 0) {
+      console.log('🚀 Enviando Coverage Requests a Bonita...');
+      
+      for (const taskData of coverageRequestTasks) {
+        const {
+          title,
+          description: taskDescription,
+          dueDate,
+          estimatedHours,
+          urgencyLevel = 'medium',
+          requiredSkills = [],
+          taskTypeId
+        } = taskData;
+
+        if (!title) {
+          throw new Error(`Coverage Request sin título encontrada`);
+        }
+
+        try {
+          // Preparar datos para Bonita Coverage Request
+          const coverageRequestData = {
+            title,
+            description: taskDescription,
+            projectId: project.id,
+            estimatedHours: estimatedHours || 0,
+            dueDate: dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            urgencyLevel,
+            requiredSkills,
+            taskTypeId: taskTypeId || 1,
+            createdBy: ownerId,
+            isCoverageRequest: true
+          };
+
+          console.log('📤 Enviando Coverage Request a Bonita:', title);
+          
+          // Enviar a Bonita usando el método específico para coverage requests
+          const bonitaCase = await bonitaService.startCoverageRequestProcess(coverageRequestData);
+          
+          bonitaCoverageRequests.push({
+            title,
+            bonitaCaseId: bonitaCase.id,
+            processType: 'coverage_request'
+          });
+
+          console.log('✅ Coverage Request enviado a Bonita:', {
+            title,
+            caseId: bonitaCase.id
+          });
+
+        } catch (bonitaError) {
+          console.error('❌ Error enviando Coverage Request a Bonita:', {
+            title,
+            error: bonitaError.message
+          });
+          // No fallar todo el proceso si una coverage request falla
+          bonitaCoverageRequests.push({
+            title,
+            error: bonitaError.message,
+            processType: 'coverage_request_failed'
+          });
+        }
       }
     }
 
     await transaction.commit();
 
-    // Obtener estado final del proceso en Bonita
-    let finalProcessState = null;
-    try {
-      finalProcessState = await bonitaService.getCaseById(caseId);
-    } catch (error) {
-      console.warn('No se pudo obtener estado final del proceso:', error.message);
-    }
-
-    // Respuesta exitosa
+    // 5. RESPUESTA COMPLETA
     res.status(201).json({
       success: true,
-      message: 'Proyecto creado y procesado automáticamente en Bonita BPM',
+      message: 'Proyecto creado exitosamente con separación de tareas',
       data: {
         project: {
           ...project.toJSON(),
           creator: owner
         },
-        bonitaCaseId: caseId,
-        tasksCreated: createdTasks.length,
-        processState: finalProcessState?.state || 'unknown',
-        automation: {
-          processStarted: true,
-          firstTaskCompleted: true,
-          message: 'El proyecto fue registrado automáticamente en Bonita BPM'
+        localTasks: {
+          count: createdLocalTasks.length,
+          tasks: createdLocalTasks.map(t => ({
+            id: t.id,
+            title: t.title,
+            isCoverageRequest: false,
+            storageLocation: 'local_database'
+          }))
         },
-        nextSteps: [
-          'El proyecto fue registrado automáticamente',
-          'El proceso continúa en Bonita BPM',
-          'Puedes revisar el estado en tiempo real'
-        ]
+        coverageRequests: {
+          count: bonitaCoverageRequests.length,
+          successful: bonitaCoverageRequests.filter(cr => !cr.error).length,
+          failed: bonitaCoverageRequests.filter(cr => cr.error).length,
+          requests: bonitaCoverageRequests.map(cr => ({
+            title: cr.title,
+            bonitaCaseId: cr.bonitaCaseId,
+            status: cr.error ? 'failed' : 'sent_to_bonita',
+            error: cr.error,
+            storageLocation: 'bonita_bpm'
+          }))
+        },
+        summary: {
+          totalTasksProcessed: tasks.length,
+          savedToDatabase: createdLocalTasks.length,
+          sentToBonita: bonitaCoverageRequests.filter(cr => !cr.error).length,
+          processingErrors: bonitaCoverageRequests.filter(cr => cr.error).length
+        }
       }
     });
 
   } catch (error) {
     await transaction.rollback();
-    console.error('Error enviando proyecto a Bonita:', error);
+    console.error('❌ Error creando proyecto:', error);
     
     res.status(500).json({
       success: false,
-      message: 'Error enviando proyecto a Bonita BPM',
+      message: 'Error creando proyecto y procesando tareas',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Error interno'
     });
   }
