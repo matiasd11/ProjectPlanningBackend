@@ -118,6 +118,9 @@ const startServer = async () => {
       console.log(`    - GET  /api/${API_VERSION}/projects/:id`);
       console.log('  Tareas:');
       console.log(`    - PUT  /api/${API_VERSION}/tasks/:taskId/take`);
+      console.log(`    - POST /api/${API_VERSION}/tasks/coverage-request`);
+      console.log(`    - POST /api/${API_VERSION}/tasks/local`);
+      console.log(`    - GET  /api/${API_VERSION}/tasks/coverage-request/:caseId/status`);
       console.log('  Bonita BPM:');
       console.log(`    - GET  /api/${API_VERSION}/bonita/tasks/:userId`);
       console.log(`    - POST /api/${API_VERSION}/bonita/tasks/:taskId/complete`);

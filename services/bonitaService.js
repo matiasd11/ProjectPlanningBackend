@@ -151,6 +151,184 @@ class BonitaService {
     return variables;
   }
 
+  // ✅ NUEVO: Mapear datos de TAREA COVERAGE REQUEST a variables de Bonita
+  mapTaskCoverageRequestToBonitaVariables(taskData) {
+    // Variables que coinciden EXACTAMENTE con las definidas en Bonita Studio
+    const variables = {
+      // Variables básicas de la imagen de Bonita Studio
+      cloudApiKey: process.env.CLOUD_API_KEY || '',
+      cloudServiceUrl: process.env.CLOUD_SERVICE_URL || '',
+      createdBy: parseInt(taskData.createdBy || 0),
+      dueDate: taskData.dueDate || new Date().toISOString().split('T')[0],
+      estimatedHours: parseFloat(taskData.estimatedHours || 0),
+      isCoverageRequest: "true", // String en lugar de boolean para Bonita
+      projectId: parseInt(taskData.projectId || 0),
+      requestType: 'coverage_request',
+      requestedBy: parseInt(taskData.createdBy || 0),
+      requiredSkills: Array.isArray(taskData.requiredSkills) 
+        ? JSON.stringify(taskData.requiredSkills)
+        : (taskData.requiredSkills || '[]'),
+      taskDescription: taskData.description || '',
+      taskTitle: taskData.title || 'Coverage Request',
+      taskTypeId: parseInt(taskData.taskTypeId || 1),
+      timestamp: new Date().toISOString(),
+      urgencyLevel: taskData.urgencyLevel || 'medium'
+    };
+
+    console.log('📝 Variables para Coverage Request en Bonita:', {
+      taskTitle: variables.taskTitle,
+      projectId: variables.projectId,
+      isCoverageRequest: variables.isCoverageRequest
+    });
+    
+    return variables;
+  }
+
+  // ✅ NUEVO: Iniciar proceso específico para Coverage Request de tarea
+  async startCoverageRequestProcess(taskData) {
+    try {
+      if (!this.apiToken) {
+        await this.authenticate();
+      }
+
+      // SIEMPRE obtener el process ID más actual antes de crear el caso
+      await this.getProcessDefinition();
+
+      // Preparar las variables para Coverage Request en Bonita
+      const variables = this.mapTaskCoverageRequestToBonitaVariables(taskData);
+
+      const payload = {
+        processDefinitionId: this.processDefinitionId,
+        variables: Object.entries(variables).map(([key, value]) => ({
+          name: key,
+          value: value
+        }))
+      };
+
+      console.log('🚀 Iniciando COVERAGE REQUEST Process en Bonita para tarea:', taskData.title);
+
+      const response = await axios.post(
+        `${this.baseURL}/API/bpm/case`,
+        payload,
+        {
+          headers: {
+            'Cookie': this.jsessionId,
+            'X-Bonita-API-Token': this.apiToken,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log('✅ Coverage Request Process iniciado, Case ID:', response.data.id);
+      return {
+        ...response.data,
+        processType: 'coverage_request'
+      };
+    } catch (error) {
+      console.error('❌ Error iniciando Coverage Request Process:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  // ✅ NUEVO: Crear caso único para todas las coverage requests del proyecto
+  async startBatchCoverageRequestProcess(projectData) {
+    try {
+      if (!this.apiToken) {
+        await this.authenticate();
+      }
+
+      // SIEMPRE obtener el process ID más actual antes de crear el caso
+      await this.getProcessDefinition();
+
+      // Variables MÍNIMAS para el caso único
+      const variables = {
+        // Datos básicos del proyecto
+        projectId: parseInt(projectData.projectId),
+        
+        // Datos batch de coverage requests
+        isBatchCoverageRequest: "true",
+        totalCoverageRequests: projectData.totalRequests,
+        coverageRequestsData: JSON.stringify(projectData.coverageRequests),
+        
+        // Metadatos mínimos
+        requestType: 'batch_coverage_requests',
+        createdBy: parseInt(projectData.createdBy),
+        timestamp: new Date().toISOString()
+      };
+
+      console.log('📝 Variables MÍNIMAS para Caso Único en Bonita:', {
+        projectId: variables.projectId,
+        isBatchCoverageRequest: variables.isBatchCoverageRequest,
+        totalCoverageRequests: variables.totalCoverageRequests,
+        requestType: variables.requestType
+      });
+
+      const payload = {
+        processDefinitionId: this.processDefinitionId,
+        variables: Object.entries(variables).map(([key, value]) => ({
+          name: key,
+          value: value
+        }))
+      };
+
+      console.log('🚀 Iniciando CASO ÚNICO en Bonita para proyecto:', projectData.projectId);
+
+      const response = await axios.post(
+        `${this.baseURL}/API/bpm/case`,
+        payload,
+        {
+          headers: {
+            'Cookie': this.jsessionId,
+            'X-Bonita-API-Token': this.apiToken,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log('✅ Caso Único iniciado, Case ID:', response.data.id);
+      return {
+        ...response.data,
+        processType: 'batch_coverage_requests',
+        totalRequests: projectData.totalRequests
+      };
+    } catch (error) {
+      console.error('❌ Error iniciando Caso Único:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  // ✅ Auto-completar primera tarea del caso único
+  async autoCompleteBatchFirstTask(caseId) {
+    try {
+      console.log('⚡ Auto-completando primera tarea del caso único...');
+      
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const pendingTasks = await this.getAllTasksForCase(caseId);
+      
+      if (pendingTasks && pendingTasks.length > 0) {
+        const firstTask = pendingTasks[0];
+        console.log(`✅ Completando tarea única: ${firstTask.name} (ID: ${firstTask.id})`);
+        
+        // Variables MÍNIMAS al completar
+        const taskVariables = {
+          batch_processed: true,
+          cloud_response: "success" // Solo la respuesta mínima
+        };
+        
+        await this.completeTaskWithVariables(firstTask.id, taskVariables);
+        console.log('✅ Primera tarea del caso único completada');
+        return true;
+      }
+      
+      return false;
+      
+    } catch (error) {
+      console.warn('⚠️ No se pudo completar automáticamente la primera tarea única:', error.message);
+      return false;
+    }
+  }
+
   // Obtener tareas pendientes para un usuario/rol
   async getPendingTasks(userId, roleName = 'ONG Originante') {
     try {
