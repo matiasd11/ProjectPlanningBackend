@@ -5,6 +5,9 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
+const jwt = require('jsonwebtoken');
+const { secret } = require('./config/jwt');
+
 // Importar modelos y base de datos
 const { syncDatabase, seedData } = require('./models');
 
@@ -61,6 +64,11 @@ app.get('/health', (req, res) => {
   });
 });
 
+app.use((req, res, next) => {
+  console.log('Body recibido:', req.body);
+  next();
+});
+
 // RUTAS API v1
 const apiRouter = express.Router();
 
@@ -88,19 +96,19 @@ app.use((error, req, res, next) => {
 const startServer = async () => {
   try {
     console.log('Iniciando servidor...');
-    
-    // Sincronizar base de datos con force para aplicar cambios del modelo
-    const dbSynced = await syncDatabase({ force: true });
+
+    // Sincronizar base de datos con modificado a 'alter' para no modificar datos existentes
+    const dbSynced = await syncDatabase({ alter: true });
     if (!dbSynced) {
       throw new Error('No se pudo sincronizar la base de datos');
     }
-    
+
     // Crear datos de prueba (solo en desarrollo)
     if (process.env.NODE_ENV === 'development') {
       console.log('Creando datos de prueba...');
       await seedData();
     }
-    
+
     // Iniciar servidor
     app.listen(PORT, () => {
       console.log(`Servidor corriendo en puerto ${PORT}`);
