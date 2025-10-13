@@ -17,6 +17,7 @@ const projectRoutes = require('./routes/projects');
 const taskRoutes = require('./routes/tasks');
 const taskTypeRoutes = require('./routes/taskTypes');
 const bonitaRoutes = require('./routes/bonita');
+const cloudTasksRoutes = require('./routes/cloudTasks');
 
 const app = express();
 const PORT = process.env.NODE_DOCKER_PORT || process.env.PORT || 5000;
@@ -78,6 +79,7 @@ apiRouter.use('/projects', projectRoutes);
 apiRouter.use('/tasks', taskRoutes);
 apiRouter.use('/task-types', taskTypeRoutes);
 apiRouter.use('/bonita', bonitaRoutes);
+apiRouter.use('/cloud-tasks', cloudTasksRoutes);
 
 // Montar el router de API con versión
 app.use(`/api/${API_VERSION}`, apiRouter);

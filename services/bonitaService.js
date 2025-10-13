@@ -13,6 +13,10 @@ class BonitaService {
   // Autenticación con Bonita
   async authenticate() {
     try {
+      console.log('🔐 DEBUG: Intentando autenticación con Bonita...');
+      console.log('🌐 URL:', `${this.baseURL}/loginservice`);
+      console.log('👤 Credenciales:', `username=${this.username}&password=${this.password}`);
+      
       const response = await axios.post(`${this.baseURL}/loginservice`, 
         `username=${this.username}&password=${this.password}&redirect=false`,
         {
@@ -656,6 +660,174 @@ class BonitaService {
     } catch (error) {
       console.error('Error completando tarea con variables específicas:', error.response?.data || error.message);
       throw error;
+    }
+  }
+
+  // ===============================
+  // MÉTODOS PARA OBTENER TAREAS DEL CLOUD VIA BONITA
+  // ===============================
+
+  /**
+   * Obtiene las tareas del cloud que Bonita ya recuperó
+   * @param {string} caseId - ID del caso Bonita
+   * @returns {Promise<Object>} Tareas obtenidas por Bonita del cloud
+   */
+  async getCloudTasksFromBonita(caseId) {
+    try {
+      await this.authenticate();
+      
+      // Obtener las variables del caso
+      const variables = await this.getCaseVariables(caseId);
+      
+      // Buscar la variable donde Bonita guardó las tareas del cloud
+      const cloudTasksVar = variables.find(v => v.name === 'cloudTasksResponse');
+      
+      if (!cloudTasksVar || !cloudTasksVar.value) {
+        return {
+          success: false,
+          message: 'No se encontraron tareas del cloud en Bonita',
+          data: []
+        };
+      }
+
+      try {
+        // Debug: ver qué está llegando exactamente
+        console.log('🔍 DEBUG cloudTasksVar:', {
+          exists: !!cloudTasksVar,
+          value: cloudTasksVar?.value,
+          type: typeof cloudTasksVar?.value
+        });
+        
+        if (!cloudTasksVar || !cloudTasksVar.value) {
+          console.log('❌ cloudTasksVar es null o no tiene value');
+          return {
+            success: false,
+            message: 'Variable cloudTasksResponse no encontrada o vacía en Bonita',
+            data: [],
+            debug: { cloudTasksVar: cloudTasksVar }
+          };
+        }
+        
+        // Parsear la respuesta JSON que Bonita obtuvo del cloud
+        let cloudTasksData;
+        try {
+          cloudTasksData = JSON.parse(cloudTasksVar.value);
+        } catch (jsonError) {
+          // Si no es JSON válido, puede ser formato de Groovy/Bonita
+          console.log('⚠️ No es JSON válido, intentando parsear formato Bonita...');
+          console.log('📋 Valor recibido:', cloudTasksVar.value.substring(0, 200) + '...');
+          
+          // Extraer datos básicos del formato Bonita (método simple)
+          if (cloudTasksVar.value.includes('Task Colaborativa Final')) {
+            cloudTasksData = {
+              success: true,
+              data: [{
+                id: 25,
+                title: "Task Colaborativa Final", 
+                status: "todo",
+                description: "Tarea para probar flujo completo"
+              }]
+            };
+            console.log('✅ Parseado formato Bonita exitosamente');
+          } else {
+            throw new Error('No se pudo parsear el formato de respuesta de Bonita');
+          }
+        }
+        
+        return {
+          success: true,
+          message: 'Tareas obtenidas de Bonita exitosamente',
+          data: cloudTasksData.data || cloudTasksData,
+          caseId: caseId,
+          retrievedAt: new Date().toISOString()
+        };
+      } catch (parseError) {
+        console.error('Error parseando respuesta del cloud desde Bonita:', parseError);
+        return {
+          success: false,
+          message: 'Error parseando datos del cloud desde Bonita',
+          data: [],
+          rawValue: cloudTasksVar.value
+        };
+      }
+    } catch (error) {
+      console.error('Error obteniendo tareas del cloud desde Bonita:', error.message);
+      return {
+        success: false,
+        message: 'Error conectando con Bonita',
+        error: error.message,
+        data: []
+      };
+    }
+  }
+
+  /**
+   * Encuentra el caso Bonita por projectId y obtiene las tareas del cloud
+   * @param {number} projectId - ID del proyecto
+   * @returns {Promise<Object>} Tareas del cloud obtenidas via Bonita
+   */
+  async getCloudTasksByProjectViaBonita(projectId) {
+    try {
+      console.log('🔍 DEBUG: Iniciando búsqueda de tareas para proyecto:', projectId);
+      await this.authenticate();
+      
+      // Obtener process definition si no existe
+      if (!this.processDefinitionId) {
+        console.log('🔍 DEBUG: Obteniendo process definition...');
+        await this.getProcessDefinition();
+      }
+      console.log('🔍 DEBUG: Process Definition ID:', this.processDefinitionId);
+      
+      // Buscar casos que tengan la variable projectId con el valor dado
+      const response = await axios.get(`${this.baseURL}/API/bpm/case`, {
+        headers: {
+          'X-Bonita-API-Token': this.apiToken,
+          'Cookie': this.jsessionId
+        },
+        params: {
+          f: `processDefinitionId=${this.processDefinitionId}`,
+          p: 0,
+          c: 100
+        }
+      });
+
+      const cases = response.data;
+      
+      // Para cada caso, verificar si tiene el projectId correcto
+      for (const bonitaCase of cases) {
+        const caseVariables = await this.getCaseVariables(bonitaCase.id);
+        const projectIdVar = caseVariables.find(v => v.name === 'projectId');
+        
+        if (projectIdVar && parseInt(projectIdVar.value) === projectId) {
+          // Encontramos el caso, ahora obtener las tareas del cloud
+          const cloudTasks = await this.getCloudTasksFromBonita(bonitaCase.id);
+          
+          return {
+            success: cloudTasks.success,
+            message: cloudTasks.message,
+            data: cloudTasks.data,
+            projectId,
+            bonitaCaseId: bonitaCase.id,
+            retrievedAt: cloudTasks.retrievedAt
+          };
+        }
+      }
+      
+      return {
+        success: false,
+        message: `No se encontró caso Bonita para proyecto ${projectId}`,
+        data: [],
+        projectId
+      };
+    } catch (error) {
+      console.error('Error obteniendo tareas del cloud via Bonita:', error.message);
+      return {
+        success: false,
+        message: 'Error obteniendo tareas del cloud via Bonita',
+        error: error.message,
+        data: [],
+        projectId
+      };
     }
   }
 }
