@@ -194,8 +194,8 @@ router.post('/', async (req, res) => {
       endDate: new Date(endDate),
       status: 'pending_approval',
       progress: 0,
-      createdBy: ownerId
-      // NO bonitaCaseId porque el proyecto no va a Bonita
+      createdBy: ownerId,
+      bonitaCaseId: null
     }, { transaction });
 
     console.log('💾 Proyecto guardado en BD local:', project.id);
@@ -289,7 +289,7 @@ router.post('/', async (req, res) => {
 
         // Actualizar proyecto con referencia al caso único
         await project.update({
-          bonita_case_id: batchCaseId
+          bonitaCaseId: batchCaseId
         }, { transaction });
 
         bonitaCoverageRequests.push({
@@ -326,7 +326,7 @@ router.post('/', async (req, res) => {
         project: {
           ...project.toJSON(),
           creator: owner,
-          bonita_case_id: project.bonita_case_id // Referencia al caso único
+          bonitaCaseId: project.bonitaCaseId // Referencia al caso único
         },
         localTasks: {
           count: createdLocalTasks.length,
