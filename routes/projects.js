@@ -9,12 +9,12 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const { status, page = 1, limit = 10 } = req.query;
-    
+
     const where = {};
     if (status) where.status = status;
-    
+
     const offset = (page - 1) * limit;
-    
+
     const { count, rows } = await Project.findAndCountAll({
       where,
       include: [
@@ -47,7 +47,7 @@ router.get('/', async (req, res) => {
       offset: parseInt(offset),
       order: [['created_at', 'DESC']]
     });
-    
+
     res.json({
       success: true,
       data: rows,
@@ -71,7 +71,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const project = await Project.findByPk(id, {
       include: [
         {
@@ -105,7 +105,7 @@ router.get('/:id', async (req, res) => {
       try {
         const tasks = await bonitaService.getAllTasksForCase(project.bonita_case_id);
         const variables = await bonitaService.getCaseVariables(project.bonita_case_id);
-        
+
         bonitaInfo = {
           caseId: project.bonita_case_id,
           currentTasks: tasks.map(task => ({
@@ -148,7 +148,7 @@ router.get('/:id', async (req, res) => {
 // POST - Crear proyecto y manejar tareas según isCoverageRequest
 router.post('/', async (req, res) => {
   const transaction = await sequelize.transaction();
-  
+
   try {
     const {
       name,
@@ -171,7 +171,7 @@ router.post('/', async (req, res) => {
     const owner = await User.findByPk(ownerId, {
       attributes: ['id', 'username', 'organizationName', 'email']
     });
-    
+
     if (!owner) {
       return res.status(404).json({
         success: false,
@@ -250,16 +250,18 @@ router.post('/', async (req, res) => {
     const bonitaCoverageRequests = [];
     if (coverageRequestTasks.length > 0) {
       console.log('🚀 Enviando TODAS las Coverage Requests en UN SOLO CASO de Bonita...');
-      
       try {
-        // Preparar datos para el caso único
-        const batchData = {
-          projectId: project.id,
-          totalRequests: coverageRequestTasks.length,
-          coverageRequests: coverageRequestTasks.map(task => ({
-            title: task.title,
+        // No enviar variables al crear el caso en Bonita
+        const bonitaCase = await bonitaService.startProcess();
+        const caseId = bonitaCase.id || bonitaCase.caseId;
+
+        console.log('✅ Caso creado en Bonita:', caseId);
+
+        const coverageRequestsData = coverageRequestTasks.length
+          ? coverageRequestTasks.map(task => ({
+            title: task.title || '',
             description: task.description || '',
-            estimatedHours: task.estimatedHours || 0,
+            estimatedHours: task.estimatedHours ?? 0,
             dueDate: task.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
             urgencyLevel: task.urgencyLevel || 'medium',
             requiredSkills: task.requiredSkills || [],
@@ -267,50 +269,52 @@ router.post('/', async (req, res) => {
             projectId: project.id,
             isCoverageRequest: true,
             source: "bonita_batch_process"
-          })),
-          createdBy: ownerId
+          }))
+          : [];
+
+        const batchVars = {
+          projectId: project.id,
+          createdBy: ownerId,
+          totalCoverageRequests: coverageRequestTasks.length,
+          timestamp: new Date().toISOString(),
+          requestType: 'batch_coverage_requests',
+          isBatchCoverageRequest: true,
+          coverageRequestsData: JSON.stringify(coverageRequestsData)
         };
 
-        console.log('📦 Datos del caso único:', {
-          projectId: batchData.projectId,
-          totalRequests: batchData.totalRequests,
-          requestTitles: coverageRequestTasks.map(t => t.title)
-        });
 
-        // Crear UN SOLO caso en Bonita para todas las coverage requests
-        const bonitaBatchCase = await bonitaService.startBatchCoverageRequestProcess(batchData);
-        const batchCaseId = bonitaBatchCase.id || bonitaBatchCase.caseId;
+        // Buscar la primera tarea humana del caso
+        const tasks = await bonitaService.getAllTasksForCase(caseId);
+        console.log('🧩 Tareas encontradas para el caso:', tasks);
+        if (!tasks.length) throw new Error('No se encontraron tareas humanas para el caso');
+        const firstTask = tasks[0];
 
-        console.log('✅ Caso único creado en Bonita:', batchCaseId);
-
-        // Completar automáticamente la primera tarea del caso único
-        console.log('⚡ Completando automáticamente la primera tarea del caso único...');
-        const autoCompleted = await bonitaService.autoCompleteBatchFirstTask(batchCaseId);
-
-        // Actualizar proyecto con referencia al caso único
+        console.log('⚡ Completando la primera tarea del caso y enviando batchVars:', batchVars);
+        const result = await bonitaService.completeTaskWithVariables(firstTask.id, caseId, batchVars);
+        console.log('✅ Tarea completada:', result);
+        // Actualizar proyecto con referencia al caso
         await project.update({
-          bonitaCaseId: batchCaseId
+          bonitaCaseId: caseId
         }, { transaction });
 
         bonitaCoverageRequests.push({
-          batchCaseId: batchCaseId,
+          batchCaseId: caseId,
           totalRequests: coverageRequestTasks.length,
           requestTitles: coverageRequestTasks.map(t => t.title),
-          processType: 'batch_coverage_requests',
-          firstTaskCompleted: autoCompleted
+          processType: 'coverage_requests',
+          firstTaskCompleted: true
         });
 
-        console.log('✅ Caso único procesado completamente:', {
-          caseId: batchCaseId,
+        console.log('✅ Caso procesado completamente:', {
+          caseId: caseId,
           totalRequests: coverageRequestTasks.length,
-          autoCompleted
+          firstTaskCompleted: true
         });
-
       } catch (bonitaError) {
-        console.error('❌ Error enviando caso único a Bonita:', bonitaError.message);
+        console.error('❌ Error enviando caso a Bonita:', bonitaError.message);
         bonitaCoverageRequests.push({
           error: bonitaError.message,
-          processType: 'batch_coverage_requests_failed',
+          processType: 'coverage_requests_failed',
           firstTaskCompleted: false
         });
       }
@@ -366,7 +370,7 @@ router.post('/', async (req, res) => {
   } catch (error) {
     await transaction.rollback();
     console.error('❌ Error creando proyecto:', error);
-    
+
     res.status(500).json({
       success: false,
       message: 'Error creando proyecto y procesando tareas',
@@ -379,7 +383,7 @@ router.post('/', async (req, res) => {
 router.get('/:id/bonita-status', async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const project = await Project.findByPk(id, {
       attributes: ['id', 'name', 'bonita_case_id', 'status']
     });
@@ -410,11 +414,11 @@ router.get('/:id/bonita-status', async (req, res) => {
       // Obtener información completa del proceso
       const tasks = await bonitaService.getAllTasksForCase(project.bonita_case_id);
       const variables = await bonitaService.getCaseVariables(project.bonita_case_id);
-      
+
       // Determinar el estado del proceso
       const activeTasks = tasks.filter(task => task.state === 'ready');
       const completedTasks = tasks.filter(task => task.state === 'completed');
-      
+
       let processStatus = 'active';
       if (activeTasks.length === 0 && tasks.length > 0) {
         processStatus = 'completed';

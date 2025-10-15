@@ -16,8 +16,8 @@ class BonitaService {
       console.log('🔐 DEBUG: Intentando autenticación con Bonita...');
       console.log('🌐 URL:', `${this.baseURL}/loginservice`);
       console.log('👤 Credenciales:', `username=${this.username}&password=${this.password}`);
-      
-      const response = await axios.post(`${this.baseURL}/loginservice`, 
+
+      const response = await axios.post(`${this.baseURL}/loginservice`,
         `username=${this.username}&password=${this.password}&redirect=false`,
         {
           headers: {
@@ -26,7 +26,7 @@ class BonitaService {
           withCredentials: true
         }
       );
-      
+
       // Extraer tokens de las cookies
       const cookies = response.headers['set-cookie'];
       if (cookies) {
@@ -35,21 +35,21 @@ class BonitaService {
         if (sessionCookie) {
           this.jsessionId = sessionCookie.split(';')[0];
         }
-        
+
         // Buscar X-Bonita-API-Token
         const apiTokenCookie = cookies.find(cookie => cookie.includes('X-Bonita-API-Token'));
         if (apiTokenCookie) {
           this.apiToken = apiTokenCookie.split('=')[1].split(';')[0];
         }
       }
-      
+
       if (this.apiToken && this.jsessionId) {
         console.log('Autenticado con Bonita BPM');
         console.log('API Token:', this.apiToken);
         console.log('Session ID:', this.jsessionId);
         return true;
       }
-      
+
       throw new Error('No se pudo obtener el token de API o session ID');
     } catch (error) {
       console.error('Error autenticando con Bonita:', error.message);
@@ -79,17 +79,17 @@ class BonitaService {
 
       if (response.data && response.data.length > 0) {
         const currentProcessId = response.data[0].id;
-        
+
         // Solo log si el process ID cambió
         if (this.processDefinitionId !== currentProcessId) {
           console.log('Process ID actualizado:', this.processDefinitionId, '->', currentProcessId);
         }
-        
+
         this.processDefinitionId = currentProcessId;
         console.log('Proceso encontrado:', response.data[0].name, 'ID:', this.processDefinitionId);
         return response.data[0];
       }
-      
+
       throw new Error('Proceso no encontrado');
     } catch (error) {
       console.error('Error obteniendo proceso:', error.message);
@@ -97,26 +97,31 @@ class BonitaService {
     }
   }
 
-  // Iniciar una instancia del proceso
+  // Iniciar una instancia del proceso en Bonita
   async startProcess(projectData) {
     try {
       if (!this.apiToken) {
         await this.authenticate();
       }
 
-      // SIEMPRE obtener el process ID más actual antes de crear el caso
+      // Obtener el último processDefinitionId
       await this.getProcessDefinition();
 
-      // Preparar las variables para Bonita en el formato correcto
-      const variables = this.mapProjectDataToBonitaVariables(projectData);
+      // Construir payload con variables en formato correcto
+      const variables = projectData
+        ? Object.entries(projectData).map(([key, value]) => ({
+          name: key,
+          value: typeof value === 'object' ? JSON.stringify(value) : value,
+          type: typeof value === 'number' ? 'java.lang.Long' : 'java.lang.String'
+        }))
+        : [];
 
       const payload = {
         processDefinitionId: this.processDefinitionId,
-        variables: Object.entries(variables).map(([key, value]) => ({
-          name: key,
-          value: value
-        }))
+        variables
       };
+
+      console.log('🚀 Iniciando proceso en Bonita con payload:', JSON.stringify(payload, null, 2));
 
       const response = await axios.post(
         `${this.baseURL}/API/bpm/case`,
@@ -130,14 +135,15 @@ class BonitaService {
         }
       );
 
-      console.log('Respuesta completa de Bonita:', JSON.stringify(response.data, null, 2));
-      console.log('Proceso iniciado en Bonita, Case ID:', response.data.id || response.data.caseId);
+      console.log('✅ Caso creado en Bonita:', response.data.id || response.data.caseId);
       return response.data;
     } catch (error) {
-      console.error('Error iniciando proceso en Bonita:', error.response?.data || error.message);
+      console.error('❌ Error iniciando proceso en Bonita:', error.response?.data || error.message);
       throw error;
     }
   }
+
+
 
   // Mapear datos del proyecto a variables de Bonita (formato simple para debugging)
   mapProjectDataToBonitaVariables(projectData) {
@@ -151,7 +157,7 @@ class BonitaService {
       tasks: JSON.stringify(projectData.tasks || []),
       status: 'pending_approval'
     };
-    
+
     return variables;
   }
 
@@ -169,7 +175,7 @@ class BonitaService {
       projectId: parseInt(taskData.projectId || 0),
       requestType: 'coverage_request',
       requestedBy: parseInt(taskData.createdBy || 0),
-      requiredSkills: Array.isArray(taskData.requiredSkills) 
+      requiredSkills: Array.isArray(taskData.requiredSkills)
         ? JSON.stringify(taskData.requiredSkills)
         : (taskData.requiredSkills || '[]'),
       taskDescription: taskData.description || '',
@@ -184,7 +190,7 @@ class BonitaService {
       projectId: variables.projectId,
       isCoverageRequest: variables.isCoverageRequest
     });
-    
+
     return variables;
   }
 
@@ -248,12 +254,12 @@ class BonitaService {
       const variables = {
         // Datos básicos del proyecto
         projectId: parseInt(projectData.projectId),
-        
+
         // Datos batch de coverage requests
         isBatchCoverageRequest: "true",
         totalCoverageRequests: projectData.totalRequests,
         coverageRequestsData: JSON.stringify(projectData.coverageRequests),
-        
+
         // Metadatos mínimos
         requestType: 'batch_coverage_requests',
         createdBy: parseInt(projectData.createdBy),
@@ -305,28 +311,28 @@ class BonitaService {
   async autoCompleteBatchFirstTask(caseId) {
     try {
       console.log('⚡ Auto-completando primera tarea del caso único...');
-      
+
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       const pendingTasks = await this.getAllTasksForCase(caseId);
-      
+
       if (pendingTasks && pendingTasks.length > 0) {
         const firstTask = pendingTasks[0];
         console.log(`✅ Completando tarea única: ${firstTask.name} (ID: ${firstTask.id})`);
-        
+
         // Variables MÍNIMAS al completar
         const taskVariables = {
           batch_processed: true,
           cloud_response: "success" // Solo la respuesta mínima
         };
-        
+
         await this.completeTaskWithVariables(firstTask.id, taskVariables);
         console.log('✅ Primera tarea del caso único completada');
         return true;
       }
-      
+
       return false;
-      
+
     } catch (error) {
       console.warn('⚠️ No se pudo completar automáticamente la primera tarea única:', error.message);
       return false;
@@ -602,31 +608,51 @@ class BonitaService {
     }
   }
 
-  // Completar una tarea específica con variables específicas
-  async completeTaskWithVariables(taskId, taskVariables) {
+  async updateCaseVariable(caseId, name, value, type = 'java.lang.String') {
     try {
-      if (!this.apiToken) {
-        await this.authenticate();
-      }
+      if (!this.apiToken) await this.authenticate();
 
-      console.log('Completando tarea con variables específicas:', taskId);
-      console.log('Variables para esta tarea:', JSON.stringify(taskVariables, null, 2));
+      const payload = {
+        value,
+        type,  // 🔹 Importante: Bonita necesita esto
+      };
 
-      // Bonita requiere asignación antes de completar tareas de usuario
-      // Asignar directamente al usuario autenticado (walter.bates)
+      await axios.put(
+        `${this.baseURL}/API/bpm/caseVariable/${caseId}/${name}`,
+        payload,
+        {
+          headers: {
+            'Cookie': this.jsessionId,
+            'X-Bonita-API-Token': this.apiToken,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log(`✅ Variable actualizada: ${name}`);
+    } catch (error) {
+      console.error(`❌ Error actualizando variable ${name}:`, error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+
+
+  // Completa la tarea luego de actualizar variables
+  async completeTaskWithVariables(taskId, caseId, taskVariables) {
+    try {
+      if (!this.apiToken) await this.authenticate();
+
+      console.log('🧩 Completando tarea con variables:', taskId);
+
+      // 1️⃣ Asignar la tarea a un usuario válido
       const users = await this.getBonitaUsers();
-      
-      // Buscar específicamente walter.bates (usuario autenticado)
-      const walterUser = users.find(user => user.userName === 'walter.bates');
+      const walterUser = users.find(u => u.userName === 'walter.bates');
       const userToAssign = walterUser || users[0];
-      
-      if (!userToAssign) {
-        throw new Error('No se encontraron usuarios en Bonita');
-      }
-      
-      console.log(`Asignando tarea al usuario: ${userToAssign.userName} (ID: ${userToAssign.id})`);
-      
-      // Asignar la tarea
+      if (!userToAssign) throw new Error('No se encontraron usuarios');
+
+      console.log(`👤 Asignando tarea a: ${userToAssign.userName} (ID: ${userToAssign.id})`);
+
       await axios.put(
         `${this.baseURL}/API/bpm/userTask/${taskId}`,
         { assigned_id: userToAssign.id },
@@ -638,13 +664,23 @@ class BonitaService {
           }
         }
       );
-      
-      console.log('Tarea asignada, completando con variables específicas...');
-      
-      // Completar la tarea con variables
+
+      for (const [key, val] of Object.entries(taskVariables)) {
+        let type;
+        if (typeof val === 'number') type = 'java.lang.Integer';
+        else if (typeof val === 'boolean') type = 'java.lang.Boolean';
+        else type = 'java.lang.String';
+
+        const value = typeof val === 'object' ? JSON.stringify(val) : val;
+
+        await this.updateCaseVariable(caseId, key, value, type);
+      }
+
+
+      // 3️⃣ Completar la tarea
       const response = await axios.post(
         `${this.baseURL}/API/bpm/userTask/${taskId}/execution`,
-        taskVariables,
+        {},
         {
           headers: {
             'Cookie': this.jsessionId,
@@ -653,12 +689,11 @@ class BonitaService {
           }
         }
       );
-      
-      console.log('Tarea completada exitosamente con variables específicas');
+
+      console.log('✅ Tarea completada correctamente');
       return response.data;
-      
     } catch (error) {
-      console.error('Error completando tarea con variables específicas:', error.response?.data || error.message);
+      console.error('❌ Error completando tarea con variables:', error.response?.data || error.message);
       throw error;
     }
   }
@@ -675,13 +710,13 @@ class BonitaService {
   async getCloudTasksFromBonita(caseId) {
     try {
       await this.authenticate();
-      
+
       // Obtener las variables del caso
       const variables = await this.getCaseVariables(caseId);
-      
+
       // Buscar la variable donde Bonita guardó las tareas del cloud
       const cloudTasksVar = variables.find(v => v.name === 'cloudTasksResponse');
-      
+
       if (!cloudTasksVar || !cloudTasksVar.value) {
         return {
           success: false,
@@ -697,7 +732,7 @@ class BonitaService {
           value: cloudTasksVar?.value,
           type: typeof cloudTasksVar?.value
         });
-        
+
         if (!cloudTasksVar || !cloudTasksVar.value) {
           console.log('❌ cloudTasksVar es null o no tiene value');
           return {
@@ -707,7 +742,7 @@ class BonitaService {
             debug: { cloudTasksVar: cloudTasksVar }
           };
         }
-        
+
         // Parsear la respuesta JSON que Bonita obtuvo del cloud
         let cloudTasksData;
         try {
@@ -716,14 +751,14 @@ class BonitaService {
           // Si no es JSON válido, puede ser formato de Groovy/Bonita
           console.log('⚠️ No es JSON válido, intentando parsear formato Bonita...');
           console.log('📋 Valor recibido:', cloudTasksVar.value.substring(0, 200) + '...');
-          
+
           // Extraer datos básicos del formato Bonita (método simple)
           if (cloudTasksVar.value.includes('Task Colaborativa Final')) {
             cloudTasksData = {
               success: true,
               data: [{
                 id: 25,
-                title: "Task Colaborativa Final", 
+                title: "Task Colaborativa Final",
                 status: "todo",
                 description: "Tarea para probar flujo completo"
               }]
@@ -733,7 +768,7 @@ class BonitaService {
             throw new Error('No se pudo parsear el formato de respuesta de Bonita');
           }
         }
-        
+
         return {
           success: true,
           message: 'Tareas obtenidas de Bonita exitosamente',
@@ -770,14 +805,14 @@ class BonitaService {
     try {
       console.log('🔍 DEBUG: Iniciando búsqueda de tareas para proyecto:', projectId);
       await this.authenticate();
-      
+
       // Obtener process definition si no existe
       if (!this.processDefinitionId) {
         console.log('🔍 DEBUG: Obteniendo process definition...');
         await this.getProcessDefinition();
       }
       console.log('🔍 DEBUG: Process Definition ID:', this.processDefinitionId);
-      
+
       // Buscar casos que tengan la variable projectId con el valor dado
       const response = await axios.get(`${this.baseURL}/API/bpm/case`, {
         headers: {
@@ -792,16 +827,16 @@ class BonitaService {
       });
 
       const cases = response.data;
-      
+
       // Para cada caso, verificar si tiene el projectId correcto
       for (const bonitaCase of cases) {
         const caseVariables = await this.getCaseVariables(bonitaCase.id);
         const projectIdVar = caseVariables.find(v => v.name === 'projectId');
-        
+
         if (projectIdVar && parseInt(projectIdVar.value) === projectId) {
           // Encontramos el caso, ahora obtener las tareas del cloud
           const cloudTasks = await this.getCloudTasksFromBonita(bonitaCase.id);
-          
+
           return {
             success: cloudTasks.success,
             message: cloudTasks.message,
@@ -812,7 +847,7 @@ class BonitaService {
           };
         }
       }
-      
+
       return {
         success: false,
         message: `No se encontró caso Bonita para proyecto ${projectId}`,
