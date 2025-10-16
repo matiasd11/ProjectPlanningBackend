@@ -5,6 +5,7 @@ const User = require('./User');
 const Project = require('./Project');
 const Task = require('./Task');
 const TaskType = require('./TaskType');
+const Commitment = require('./Commitment');
 
 
 // 🔹 1. User tiene muchos Projects (como creador)
@@ -70,6 +71,28 @@ Task.belongsTo(TaskType, {
   foreignKey: 'taskTypeId',
   as: 'taskType',
   onDelete: 'RESTRICT'
+});
+
+// 🔹 6. Task tiene muchos Commitments
+Task.hasMany(Commitment, { 
+  foreignKey: 'taskId', 
+  as: 'commitments' 
+});
+
+Commitment.belongsTo(Task, { 
+  foreignKey: 'taskId', 
+  as: 'task' 
+});
+
+// 🔹 7. User (ONG) tiene muchos Commitments
+User.hasMany(Commitment, { 
+  foreignKey: 'ongId', 
+  as: 'commitments' 
+});
+
+Commitment.belongsTo(User, { 
+  foreignKey: 'ongId', 
+  as: 'ong' 
 });
 
 // Función para sincronizar BD
@@ -251,7 +274,8 @@ module.exports = {
     User,
     Project,
     Task,
-    TaskType
+    TaskType,
+    Commitment
   },
   syncDatabase,
   closeConnection,

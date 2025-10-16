@@ -13,8 +13,6 @@
     "docker:build": "docker-compose build",
     "docker:restart": "docker-compose restart backend",
     "docker:prod": "NODE_ENV=production DOCKER_COMMAND='npm start' docker-compose up -d",
-    "db:migrate": "npx sequelize-cli db:migrate",
-    "db:seed": "npx sequelize-cli db:seed:all",
     "db:reset": "docker-compose exec mysql mysql -u root -proot -e 'DROP DATABASE IF EXISTS projectplanning; CREATE DATABASE projectplanning;' && docker-compose restart backend"
   },
   "keywords": [

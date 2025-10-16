@@ -1,6 +1,6 @@
 const express = require('express');
 const { models } = require('../models');
-const { User } = models;
+const { User, Commitment } = models;
 const bonitaService = require('../services/bonitaService');
 
 const router = express.Router();
@@ -487,5 +487,7 @@ router.get('/cases/:caseId/context', async (req, res) => {
     });
   }
 });
+
+
 
 module.exports = router;

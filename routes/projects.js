@@ -379,6 +379,74 @@ router.post('/', async (req, res) => {
   }
 });
 
+
+// POST - Add a commitment to a project (find caseId from project)
+router.post('/:projectId/commitments', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { taskId, ongId, description } = req.body;
+
+    // Buscar el proyecto y obtener el caseId
+    const project = await models.Project.findByPk(projectId);
+    if (!project || !project.bonitaCaseId) {
+      return res.status(404).json({
+        success: false,
+        message: 'Proyecto no encontrado o sin caseId asociado.'
+      });
+    }
+    const caseId = project.bonitaCaseId;
+
+    // Crear el compromiso en la base local
+    const newCommitment = await models.Commitment.create({
+      taskId,
+      ongId,
+      description,
+      status: 'pending'
+    });
+
+    // Obtener los compromisos actuales del caso en Bonita
+    const bonitaVariables = await bonitaService.getCaseVariables(caseId);
+    const commitmentsVar = bonitaVariables.find(v => v.name === 'commitments');
+
+    let commitments = [];
+    if (commitmentsVar && commitmentsVar.value) {
+      try {
+        const parsed = JSON.parse(commitmentsVar.value);
+        commitments = Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        console.error("Could not parse existing commitments from Bonita, starting fresh.", e);
+        commitments = [];
+      }
+    }
+
+    commitments.push({
+      id: newCommitment.id,
+      taskId: newCommitment.taskId,
+      ongId: newCommitment.ongId,
+      description: newCommitment.description,
+      status: newCommitment.status,
+      createdAt: newCommitment.createdAt
+    });
+
+    // Actualizar la variable en Bonita
+    await bonitaService.updateCaseVariable(caseId, 'commitments', JSON.stringify(commitments), 'java.lang.String');
+
+    res.status(201).json({
+      success: true,
+      message: 'Commitment added successfully and Bonita case variable updated.',
+      data: newCommitment
+    });
+
+  } catch (error) {
+    console.error('Error adding commitment:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add commitment.',
+      error: error.message
+    });
+  }
+});
+
 // GET - Estado del proceso en Bonita para un proyecto
 router.get('/:id/bonita-status', async (req, res) => {
   try {
