@@ -2,10 +2,13 @@ const express = require('express');
 const { models } = require('../models');
 const { User, Project } = models;
 const { secret, expiresIn } = require('../config/jwt');
+const bonitaService = require('../services/bonitaService');
 
 const router = express.Router();
 
 const jwt = require('jsonwebtoken');
+
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // GET - Listar usuarios (ONGs)
 router.get('/', async (req, res) => {
@@ -77,35 +80,73 @@ router.post('/', async (req, res) => {
 
 
 // POST /users/login
-router.post('/login', async (req, res) => {
+// router.post('/login', async (req, res) => {
+//   try {
+//     const { username, password } = req.body;
+
+//     if (!username || !password)
+//       return res.status(400).json({ message: 'Usuario y contraseña requeridos' });
+
+//     const user = await User.findOne({ where: { username } });
+
+//     if (!user)
+//       return res.status(401).json({ message: 'Usuario o contraseña incorrectos' });
+
+//     const isMatch = await user.validatePassword(password);
+//     if (!isMatch)
+//       return res.status(401).json({ message: 'Usuario o contraseña incorrectos' });
+
+//     // Generar token JWT
+//     const token = jwt.sign(
+//       { id: user.id, username: user.username, role: user.role },
+//       secret,
+//       { expiresIn }
+//     );
+
+//     res.json({ token, user: user.toSafeJSON() });
+
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: 'Error interno del servidor' });
+//   }
+// });
+
+router.post("/login", async (req, res) => {
+  const { username, password } = req.body;
   try {
-    const { username, password } = req.body;
+    const sessionData = await bonitaService.login(username, password);
 
-    if (!username || !password)
-      return res.status(400).json({ message: 'Usuario y contraseña requeridos' });
+    if (!sessionData || !sessionData.session_id) {
+      return res.status(401).json({ message: "Credenciales inválidas" });
+    }
 
-    const user = await User.findOne({ where: { username } });
+    console.log(" Autenticación con Bonita exitosa. Session ID:", sessionData.session_id);
 
-    if (!user)
-      return res.status(401).json({ message: 'Usuario o contraseña incorrectos' });
+    const roles = await bonitaService.getUserRoles(username);
 
-    const isMatch = await user.validatePassword(password);
-    if (!isMatch)
-      return res.status(401).json({ message: 'Usuario o contraseña incorrectos' });
-
-    // Generar token JWT
     const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role },
-      secret,
-      { expiresIn }
+      { username, roles },
+      JWT_SECRET,
+      { expiresIn: "2h" }
     );
 
-    res.json({ token, user: user.toSafeJSON() });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Error interno del servidor' });
+    res.json({
+      token,
+      user: {
+        username,
+        roles,
+        bonitaSession: sessionData.session_id
+      },
+      message: 'Login exitoso',
+      bonitaApiToken: bonitaService.apiToken
+    });
+  } catch (error) {
+    if (error.response && error.response.status === 401) {
+      return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
+    }
+    return res.status(500).json({ message: "Error al iniciar sesión" });
   }
 });
+
 
 module.exports = router;

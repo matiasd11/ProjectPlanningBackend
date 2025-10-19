@@ -3,57 +3,123 @@ const axios = require('axios');
 class BonitaService {
   constructor() {
     this.baseURL = process.env.BONITA_URL || 'http://localhost:8080/bonita';
-    this.username = process.env.BONITA_USERNAME || 'walter.bates';
-    this.password = process.env.BONITA_PASSWORD || 'bpm';
     this.apiToken = null;
     this.jsessionId = null;
     this.processDefinitionId = process.env.BONITA_PROCESS_ID || null;
   }
 
   // Autenticación con Bonita
-  async authenticate() {
+  // async authenticate(username, password) {
+  //   try {
+  //     console.log('🔐 DEBUG: Intentando autenticación con Bonita...');
+  //     console.log('🌐 URL:', `${this.baseURL}/loginservice`);
+  //     console.log('👤 Credenciales:', `username=${username}&password=${password}`);
+
+  //     const response = await axios.post(`${this.baseURL}/loginservice`,
+  //       `username=${this.username}&password=${password}&redirect=false`,
+  //       {
+  //         headers: {
+  //           'Content-Type': 'application/x-www-form-urlencoded'
+  //         },
+  //         withCredentials: true
+  //       }
+  //     );
+
+  //     // Extraer tokens de las cookies
+  //     const cookies = response.headers['set-cookie'];
+  //     if (cookies) {
+  //       // Buscar JSESSIONID
+  //       const sessionCookie = cookies.find(cookie => cookie.includes('JSESSIONID'));
+  //       if (sessionCookie) {
+  //         this.jsessionId = sessionCookie.split(';')[0];
+  //       }
+
+  //       // Buscar X-Bonita-API-Token
+  //       const apiTokenCookie = cookies.find(cookie => cookie.includes('X-Bonita-API-Token'));
+  //       if (apiTokenCookie) {
+  //         this.apiToken = apiTokenCookie.split('=')[1].split(';')[0];
+  //       }
+  //     }
+
+  //     if (this.apiToken && this.jsessionId) {
+  //       console.log('Autenticado con Bonita BPM');
+  //       console.log('API Token:', this.apiToken);
+  //       console.log('Session ID:', this.jsessionId);
+  //       return true;
+  //     }
+
+  //     throw new Error('No se pudo obtener el token de API o session ID');
+  //   } catch (error) {
+  //     console.error('Error autenticando con Bonita:', error.message);
+  //     return false;
+  //   }
+  // }
+
+  async authenticate(username = this.username, password = this.password) {
     try {
       console.log('🔐 DEBUG: Intentando autenticación con Bonita...');
       console.log('🌐 URL:', `${this.baseURL}/loginservice`);
-      console.log('👤 Credenciales:', `username=${this.username}&password=${this.password}`);
+      console.log('👤 Credenciales:', `username=${username}&password=${password}`);
 
-      const response = await axios.post(`${this.baseURL}/loginservice`,
-        `username=${this.username}&password=${this.password}&redirect=false`,
+      const response = await axios.post(
+        `${this.baseURL}/loginservice`,
+        `username=${username}&password=${password}&redirect=false`,
         {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          },
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           withCredentials: true
         }
       );
 
-      // Extraer tokens de las cookies
-      const cookies = response.headers['set-cookie'];
-      if (cookies) {
-        // Buscar JSESSIONID
-        const sessionCookie = cookies.find(cookie => cookie.includes('JSESSIONID'));
-        if (sessionCookie) {
-          this.jsessionId = sessionCookie.split(';')[0];
-        }
+      // Bonita puede devolver token en cookies o en el body
+      const cookies = response.headers['set-cookie'] || [];
 
-        // Buscar X-Bonita-API-Token
-        const apiTokenCookie = cookies.find(cookie => cookie.includes('X-Bonita-API-Token'));
-        if (apiTokenCookie) {
-          this.apiToken = apiTokenCookie.split('=')[1].split(';')[0];
-        }
+      // JSESSIONID si está
+      const sessionCookie = cookies.find(c => c.includes('JSESSIONID'));
+      this.jsessionId = sessionCookie ? sessionCookie.split(';')[0] : null;
+
+      // API token desde cookie o desde body
+      const apiTokenCookie = cookies.find(c => c.includes('X-Bonita-API-Token'));
+      this.apiToken = apiTokenCookie
+        ? apiTokenCookie.split('=')[1].split(';')[0]
+        : response.data?.token || this.apiToken;
+
+      if (!this.apiToken) {
+        throw new Error('No se pudo obtener el token de API de Bonita');
       }
 
-      if (this.apiToken && this.jsessionId) {
-        console.log('Autenticado con Bonita BPM');
-        console.log('API Token:', this.apiToken);
-        console.log('Session ID:', this.jsessionId);
-        return true;
-      }
+      console.log('✅ Autenticado con Bonita BPM');
+      console.log('API Token:', this.apiToken);
+      console.log('Session ID:', this.jsessionId);
 
-      throw new Error('No se pudo obtener el token de API o session ID');
+      return true;
     } catch (error) {
-      console.error('Error autenticando con Bonita:', error.message);
+      console.error('❌ Error autenticando con Bonita:', error.response?.data || error.message);
       return false;
+    }
+  }
+
+
+  async login(username, password) {
+    const authenticated = await this.authenticate(username, password);
+
+    if (!authenticated) {
+      throw new Error("No se pudo autenticar con Bonita");
+    }
+
+    return {
+      session_id: this.jsessionId,
+      apiToken: this.apiToken
+    };
+  }
+
+  async getUserRoles(username) {
+    try {
+      const response = await axios.get(`${this.baseURL}/API/identity/user?p=0&c=100&f=username=${username}`);
+
+      return response.data.roles || [];
+    } catch (error) {
+      console.error("Error obteniendo roles de Bonita:", error.message);
+      return [];
     }
   }
 
