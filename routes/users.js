@@ -122,10 +122,10 @@ router.post("/login", async (req, res) => {
 
     console.log(" Autenticación con Bonita exitosa. Session ID:", sessionData.session_id);
 
-    const roles = await bonitaService.getUserRoles(username);
+    //const roles = await bonitaService.getUserRoles(username);
 
     const token = jwt.sign(
-      { username, roles },
+      { username, /*roles*/ },
       JWT_SECRET,
       { expiresIn: "2h" }
     );
@@ -134,7 +134,7 @@ router.post("/login", async (req, res) => {
       token,
       user: {
         username,
-        roles,
+        /*roles,*/
         bonitaSession: sessionData.session_id
       },
       message: 'Login exitoso',
