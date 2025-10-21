@@ -55,7 +55,7 @@ class BonitaService {
   //   }
   // }
 
-  async authenticate(username = this.username, password = this.password) {
+  async authenticate(username = "walter.bates", password ="bpm") {
     try {
       console.log('🔐 DEBUG: Intentando autenticación con Bonita...');
       console.log('🌐 URL:', `${this.baseURL}/loginservice`);
