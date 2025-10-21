@@ -98,27 +98,146 @@ class BonitaService {
     }
   }
 
+  async authenticateTemp(username, password) {
+    const response = await axios.post(
+      `${this.baseURL}/loginservice`,
+      `username=${username}&password=${password}&redirect=false`,
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, withCredentials: true }
+    );
 
-  async login(username, password) {
-    const authenticated = await this.authenticate(username, password);
+    const cookies = response.headers['set-cookie'] || [];
+    const jsessionId = cookies.find(c => c.includes('JSESSIONID')).split(';')[0];
+    const apiToken = cookies.find(c => c.includes('X-Bonita-API-Token')).split('=')[1].split(';')[0];
 
-    if (!authenticated) {
-      throw new Error("No se pudo autenticar con Bonita");
+    if (!apiToken) {
+      throw new Error('No se pudo obtener el token de API de Bonita');
     }
 
-    return {
-      session_id: this.jsessionId,
-      apiToken: this.apiToken
-    };
+    console.log('✅ Autenticado con Bonita BPM');
+    console.log('API Token:', apiToken);
+    console.log('Session ID:', jsessionId);
+
+    return { jsessionId, apiToken };
   }
+
+
+
+  async login(username, password) {
+    try {
+      const tempSession = await this.authenticateTemp(username, password);
+
+      if (!tempSession) {
+        const error = new Error("No se pudo autenticar con Bonita");
+        error.status = 401;
+        throw error;
+      }
+
+      return {
+        session_id: tempSession.jsessionId,
+        apiToken: tempSession.apiToken
+      };
+
+    } catch (err) {
+
+      if (err.response) {
+        throw err;
+      }
+      throw err;
+    }
+  }
+
+  async logout() {
+    try {
+      if (!this.jsessionId) return; // no hay sesión
+
+      // Llamar al endpoint de logout de Bonita
+      await axios.get(`${this.baseURL}/logoutservice`, {
+        headers: {
+          Cookie: this.jsessionId
+        }
+      });
+
+      console.log('🚪 Sesión de Bonita cerrada en el servidor.');
+    } catch (error) {
+      console.error('❌ Error cerrando sesión en Bonita:', error.message);
+    } finally {
+      // Limpiar variables locales siempre
+      this.apiToken = null;
+      this.jsessionId = null;
+    }
+  }
+
+
 
   async getUserRoles(username) {
     try {
-      const response = await axios.get(`${this.baseURL}/API/identity/user?p=0&c=100&f=username=${username}`);
 
-      return response.data.roles || [];
+      const adminLogin = await axios.post(
+        `${this.baseURL}/loginservice`,
+        'username=walter.bates&password=bpm',
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      );
+
+      const apiToken = adminLogin.headers['x-bonita-api-token'];
+      const cookieHeader = adminLogin.headers['set-cookie'].find(c => c.startsWith('JSESSIONID'));
+      const jsessionId = cookieHeader.split(';')[0];
+
+
+      const userResponse = await axios.get(
+        `${this.baseURL}/API/identity/user?p=0&c=1&f=username=${username}`,
+        {
+          headers: {
+            Cookie: jsessionId,
+            'X-Bonita-API-Token': apiToken,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!userResponse.data.length) {
+        console.warn(`Usuario ${username} no encontrado.`);
+        return [];
+      }
+
+      const userId = userResponse.data[0].id;
+
+      const membershipsRes = await axios.get(
+        `${this.baseURL}/API/identity/membership?f=user_id=${userId}`,
+        {
+          headers: {
+            Cookie: jsessionId,
+            'X-Bonita-API-Token': apiToken,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      // Obtener roles completos
+      const roles = await Promise.all(
+        membershipsRes.data.map(async m => {
+          const roleRes = await axios.get(`${this.baseURL}/API/identity/role/${m.role_id}`,
+            {
+              headers: {
+                Cookie: jsessionId,
+                'X-Bonita-API-Token': apiToken,
+                'Content-Type': 'application/json'
+              }
+
+            });
+          return roleRes.data.displayName || roleRes.data.name;
+        })
+      );
+      console.log("Roles obtenidos de Bonita:", roles);
+      return roles;
+
     } catch (error) {
-      console.error("Error obteniendo roles de Bonita:", error.message);
+      if (error.response) {
+        console.error("Error obteniendo roles de Bonita:", error.response.status, error.response.data);
+      } else if (error.request) {
+        console.error("Error obteniendo roles de Bonita: No hubo respuesta del servidor", error.request);
+      } else {
+        console.error("Error obteniendo roles de Bonita:", error.message);
+      }
       return [];
     }
   }

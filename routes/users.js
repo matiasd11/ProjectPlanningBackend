@@ -122,10 +122,11 @@ router.post("/login", async (req, res) => {
 
     console.log(" Autenticación con Bonita exitosa. Session ID:", sessionData.session_id);
 
-    //const roles = await bonitaService.getUserRoles(username);
+    const roles = await bonitaService.getUserRoles(username);
+    console.log("Roles obtenidos de Bonita:", roles);
 
     const token = jwt.sign(
-      { username, /*roles*/ },
+      { username, roles },
       JWT_SECRET,
       { expiresIn: "2h" }
     );
@@ -134,7 +135,7 @@ router.post("/login", async (req, res) => {
       token,
       user: {
         username,
-        /*roles,*/
+        roles,
         bonitaSession: sessionData.session_id
       },
       message: 'Login exitoso',
@@ -145,6 +146,15 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
     }
     return res.status(500).json({ message: "Error al iniciar sesión" });
+  }
+});
+
+router.post("/logout", (req, res) => {
+  try {
+    bonitaService.logout();
+    res.json({ message: "Sesión Bonita cerrada correctamente" });
+  } catch (error) {
+    res.status(500).json({ message: "Error al cerrar sesión" });
   }
 });
 

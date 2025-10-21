@@ -74,25 +74,25 @@ Task.belongsTo(TaskType, {
 });
 
 // 🔹 6. Task tiene muchos Commitments
-Task.hasMany(Commitment, { 
-  foreignKey: 'taskId', 
-  as: 'commitments' 
+Task.hasMany(Commitment, {
+  foreignKey: 'taskId',
+  as: 'commitments'
 });
 
-Commitment.belongsTo(Task, { 
-  foreignKey: 'taskId', 
-  as: 'task' 
+Commitment.belongsTo(Task, {
+  foreignKey: 'taskId',
+  as: 'task'
 });
 
 // 🔹 7. User (ONG) tiene muchos Commitments
-User.hasMany(Commitment, { 
-  foreignKey: 'ongId', 
-  as: 'commitments' 
+User.hasMany(Commitment, {
+  foreignKey: 'ongId',
+  as: 'commitments'
 });
 
-Commitment.belongsTo(User, { 
-  foreignKey: 'ongId', 
-  as: 'ong' 
+Commitment.belongsTo(User, {
+  foreignKey: 'ongId',
+  as: 'ong'
 });
 
 // Función para sincronizar BD
@@ -105,8 +105,8 @@ const syncDatabase = async (options = {}) => {
     }
 
     // Sincronizar modelos
-    const { force = false, alter = false } = options;
-    
+    const { force = true, alter = false } = options;
+
     if (force) {
       console.log('⚠️  RECREANDO todas las tablas...');
     } else if (alter) {
@@ -114,10 +114,10 @@ const syncDatabase = async (options = {}) => {
     }
 
     await sequelize.sync({ force, alter });
-    
+
     console.log('Base de datos sincronizada correctamente');
     console.log('Modelos disponibles:', Object.keys(sequelize.models));
-    
+
     return true;
   } catch (error) {
     console.error('Error sincronizando BD:', error.message);
