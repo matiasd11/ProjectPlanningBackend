@@ -45,10 +45,19 @@ services:
       DB_PORT: $MYSQLDB_DOCKER_PORT
       # Bonita connection al host (Bonita Studio)
       BONITA_URL: http://host.docker.internal:8080/bonita
+      # Configuración para hot-reload en Windows
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: 1000
     volumes:
-      # Hot reload para desarrollo
+      # Montar el código fuente para hot-reload
+      # El código se monta desde el host, permitiendo cambios en tiempo real
       - .:/app
+      # Excluir node_modules del host para usar los del contenedor (mejor rendimiento)
       - /app/node_modules
+      # Excluir también otros directorios que no necesitan sincronización
+      - /app/.git
+      - /app/dist
+      - /app/coverage
     depends_on:
       mysql:
         condition: service_healthy
@@ -56,7 +65,11 @@ services:
       - project-planning-network
     stdin_open: true
     tty: true
+    # Usar nodemon para hot-reload automático
     command: ${DOCKER_COMMAND:-npm run dev}
+    # Configuración adicional para Windows
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 volumes:
   mysql_data:
