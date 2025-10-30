@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const bonitaService = require('../services/bonitaService');
-
+const axios = require('axios');
 /**
  * @route GET /api/v1/cloud-tasks/:projectId
  * @desc Obtiene tareas colaborativas del cloud via Bonita para un proyecto
@@ -43,44 +43,63 @@ router.get('/:projectId', async (req, res) => {
 });
 
 /**
- * @route GET /api/v1/cloud-tasks/extension/tasks
- * @desc Proxy a Bonita /API/extension/tasks?projectId=... tras autenticación
- * @query {number} projectId - ID del proyecto
+ * @route POST /api/v1/cloud-tasks/extension/tasks
+ * @desc Proxy a Bonita /API/extension/cloudTasks (envía username, password y projectId en body)
  */
-router.get('/extension/tasks', async (req, res) => {
+router.post('/extension/tasks', async (req, res) => {
   try {
-    const { projectId } = req.query;
-    if (!projectId) {
-      return res.status(400).json({ success: false, message: 'Falta projectId en query' });
+    const { username, password, projectId } = req.body;
+
+    if (!username || !password || !projectId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Faltan datos requeridos en el body',
+      });
     }
 
-    // Autenticación
-    const loggedIn = await bonitaService.authenticate("walter.bates","bpm");
+    // 🔐 Autenticación con Bonita
+    const loggedIn = await bonitaService.authenticate(username, password);
     if (!loggedIn) {
-      return res.status(500).json({ success: false, message: 'No se pudo autenticar con Bonita' });
+      return res.status(500).json({
+        success: false,
+        message: 'No se pudo autenticar con Bonita',
+      });
     }
 
-    // Llamada directa al endpoint extension
-    const axios = require('axios');
-    const url = `${bonitaService.baseURL}/API/extension/cloudTasks?projectId=${projectId}`;
-    const response = await axios.get(url, {
-      headers: {
-        'Cookie': bonitaService.jsessionId,
-        'X-Bonita-API-Token': bonitaService.apiToken,
-        'Content-Type': 'application/json'
+    const url = `${bonitaService.baseURL}/API/extension/cloudTasks`;
+    console.log(`📡 Llamando a Bonita Extension POST ${url}`);
+
+    // 👇 Enviamos el body JSON igual que espera el Groovy
+    const response = await axios.post(
+      url,
+      { username, password, projectId },
+      {
+        headers: {
+          'Cookie': `${bonitaService.jsessionId}`,
+          'X-Bonita-API-Token': bonitaService.apiToken,
+          'Content-Type': 'application/json',
+        },
       }
-    });
+    );
 
     res.json({
       success: true,
       data: response.data,
-      projectId
     });
   } catch (error) {
-    console.error('Error llamando a extension/tasks:', error.message);
-    res.status(500).json({ success: false, message: 'Error llamando a extension/tasks', error: error.message });
+    console.error(
+      '❌ Error llamando a extension/tasks:',
+      error.response?.data || error.message
+    );
+    res.status(500).json({
+      success: false,
+      message: 'Error llamando a extension/tasks',
+      error: error.response?.data || error.message,
+    });
   }
 });
+
+
 /**
  * @route POST /api/v1/cloud-tasks/extension/commitment
  * @desc Proxy a Bonita /API/extension/commitment tras autenticación
@@ -104,8 +123,6 @@ router.post('/extension/commitment', async (req, res) => {
       return res.status(500).json({ success: false, message: 'No se pudo autenticar con Bonita' });
     }
 
-    // 🌍 Endpoint Bonita extension
-    const axios = require('axios');
     const url = `${bonitaService.baseURL}/API/extension/commitment`;
 
     console.log(`Llamando a Bonita Extension POST ${url}`);
@@ -161,7 +178,8 @@ router.post('/extension/commitmentsByTask', async (req, res) => {
       });
     }
 
-    // 🔐 Autenticación Bonita
+    // 🔐 Autenticación con Bonita
+    console.log('🔐 DEBUG: Intentando autenticación con Bonita...');
     const loggedIn = await bonitaService.authenticate(username, password);
     if (!loggedIn) {
       return res.status(500).json({
@@ -170,18 +188,16 @@ router.post('/extension/commitmentsByTask', async (req, res) => {
       });
     }
 
-    // 🌍 Endpoint Bonita extension
-    const axios = require('axios');
     const url = `${bonitaService.baseURL}/API/extension/commitmentsByTask`;
+    console.log(`🌐 Llamando a Bonita Extension POST ${url}`);
 
-    console.log(`Llamando a Bonita Extension POST ${url}`);
-
+    // 👇 Enviamos el body en formato JSON plano (como el otro endpoint)
     const response = await axios.post(
       url,
       {
         username,
         password,
-        taskId
+        taskId,
       },
       {
         headers: {
@@ -189,18 +205,21 @@ router.post('/extension/commitmentsByTask', async (req, res) => {
           'X-Bonita-API-Token': bonitaService.apiToken,
           'Content-Type': 'application/json',
         },
+        timeout: 15000, // por si tarda la extensión
       }
     );
 
+    // ✅ OK
     res.json({
       success: true,
       data: response.data,
     });
   } catch (error) {
     console.error(
-      'Error llamando a extension/commitmentsByTask:',
+      '❌ Error llamando a extension/commitmentsByTask:',
       error.response?.data || error.message
     );
+
     res.status(500).json({
       success: false,
       message: 'Error llamando a extension/commitmentsByTask',
@@ -208,6 +227,8 @@ router.post('/extension/commitmentsByTask', async (req, res) => {
     });
   }
 });
+
+
 
 
 module.exports = router;
