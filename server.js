@@ -99,17 +99,17 @@ const startServer = async () => {
   try {
     console.log('Iniciando servidor...');
 
-    // Sincronizar base de datos con modificado a 'alter' para no modificar datos existentes
-    const dbSynced = await syncDatabase({ alter: true });
+    // Sincronizar base de datos solo si es necesario (sin alter para evitar duplicados)
+    const dbSynced = await syncDatabase();
     if (!dbSynced) {
       throw new Error('No se pudo sincronizar la base de datos');
     }
 
-    // Crear datos de prueba (solo en desarrollo)
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Creando datos de prueba...');
-      await seedData();
-    }
+    // // Crear datos de prueba (solo en desarrollo)
+    // if (process.env.NODE_ENV === 'development') {
+    //   console.log('Creando datos de prueba...');
+    //   await seedData();
+    // }
 
     // Iniciar servidor
     app.listen(PORT, () => {
