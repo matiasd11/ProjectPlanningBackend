@@ -8,6 +8,62 @@ class BonitaService {
     this.processDefinitionId = process.env.BONITA_PROCESS_ID || null;
   }
 
+  async login(username, password) {
+    const authenticated = await this.authenticate(username, password);
+
+    if (!authenticated) {
+      throw new Error("No se pudo autenticar con Bonita");
+    }
+
+    return {
+      session_id: this.jsessionId,
+      apiToken: this.apiToken
+    };
+  }
+
+  async authenticate(username = "walter.bates", password = "bpm") {
+    try {
+      console.log('🔐 DEBUG: Intentando autenticación con Bonita...');
+      console.log('🌐 URL:', `${this.baseURL}/loginservice`);
+      console.log('👤 Credenciales:', `username=${username}&password=${password}`);
+
+      const response = await axios.post(
+        `${this.baseURL}/loginservice`,
+        `username=${username}&password=${password}&redirect=false`,
+        {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          withCredentials: true
+        }
+      );
+
+      // Bonita puede devolver token en cookies o en el body
+      const cookies = response.headers['set-cookie'] || [];
+
+      // JSESSIONID si está
+      const sessionCookie = cookies.find(c => c.includes('JSESSIONID'));
+      this.jsessionId = sessionCookie ? sessionCookie.split(';')[0] : null;
+
+      // API token desde cookie o desde body
+      const apiTokenCookie = cookies.find(c => c.includes('X-Bonita-API-Token'));
+      this.apiToken = apiTokenCookie
+        ? apiTokenCookie.split('=')[1].split(';')[0]
+        : response.data?.token || this.apiToken;
+
+      if (!this.apiToken) {
+        throw new Error('No se pudo obtener el token de API de Bonita');
+      }
+
+      console.log('✅ Autenticado con Bonita BPM');
+      console.log('API Token:', this.apiToken);
+      console.log('Session ID:', this.jsessionId);
+
+      return true;
+    } catch (error) {
+      console.error('❌ Error autenticando con Bonita:', error.response?.data || error.message);
+      return false;
+    }
+  }
+
   // Autenticación con Bonita
   // async authenticate(username, password) {
   //   try {
@@ -55,62 +111,6 @@ class BonitaService {
   //   }
   // }
 
-  async authenticate(username = "walter.bates", password ="bpm") {
-    try {
-      console.log('🔐 DEBUG: Intentando autenticación con Bonita...');
-      console.log('🌐 URL:', `${this.baseURL}/loginservice`);
-      console.log('👤 Credenciales:', `username=${username}&password=${password}`);
-
-      const response = await axios.post(
-        `${this.baseURL}/loginservice`,
-        `username=${username}&password=${password}&redirect=false`,
-        {
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          withCredentials: true
-        }
-      );
-
-      // Bonita puede devolver token en cookies o en el body
-      const cookies = response.headers['set-cookie'] || [];
-
-      // JSESSIONID si está
-      const sessionCookie = cookies.find(c => c.includes('JSESSIONID'));
-      this.jsessionId = sessionCookie ? sessionCookie.split(';')[0] : null;
-
-      // API token desde cookie o desde body
-      const apiTokenCookie = cookies.find(c => c.includes('X-Bonita-API-Token'));
-      this.apiToken = apiTokenCookie
-        ? apiTokenCookie.split('=')[1].split(';')[0]
-        : response.data?.token || this.apiToken;
-
-      if (!this.apiToken) {
-        throw new Error('No se pudo obtener el token de API de Bonita');
-      }
-
-      console.log('✅ Autenticado con Bonita BPM');
-      console.log('API Token:', this.apiToken);
-      console.log('Session ID:', this.jsessionId);
-
-      return true;
-    } catch (error) {
-      console.error('❌ Error autenticando con Bonita:', error.response?.data || error.message);
-      return false;
-    }
-  }
-
-
-  async login(username, password) {
-    const authenticated = await this.authenticate(username, password);
-
-    if (!authenticated) {
-      throw new Error("No se pudo autenticar con Bonita");
-    }
-
-    return {
-      session_id: this.jsessionId,
-      apiToken: this.apiToken
-    };
-  }
 
   async getUserRoles(username) {
     try {

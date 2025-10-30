@@ -5,13 +5,12 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
-const jwt = require('jsonwebtoken');
-const { secret } = require('./config/jwt');
 
 // Importar modelos y base de datos
 const { syncDatabase, seedData } = require('./models');
 
 // Importar rutas
+const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const projectRoutes = require('./routes/projects');
 const taskRoutes = require('./routes/tasks');
@@ -74,6 +73,7 @@ app.use((req, res, next) => {
 const apiRouter = express.Router();
 
 // Montar rutas en el router de API
+apiRouter.use('/auth', authRoutes);
 apiRouter.use('/users', userRoutes);
 apiRouter.use('/projects', projectRoutes);
 apiRouter.use('/tasks', taskRoutes);
@@ -118,6 +118,8 @@ const startServer = async () => {
       console.log(`API disponible en: http://localhost:${PORT}/api/${API_VERSION}`);
       console.log(`Health check: http://localhost:${PORT}/health`);
       console.log('Endpoints disponibles:');
+      console.log('  Autenticación:');
+      console.log(`    - POST /api/${API_VERSION}/auth/login`);
       console.log('  Usuarios:');
       console.log(`    - GET  /api/${API_VERSION}/users`);
       console.log(`    - POST /api/${API_VERSION}/users`);
