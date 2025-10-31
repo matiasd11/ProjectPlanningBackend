@@ -178,8 +178,7 @@ router.post('/extension/commitmentsByTask', async (req, res) => {
       });
     }
 
-    // 🔐 Autenticación con Bonita
-    console.log('🔐 DEBUG: Intentando autenticación con Bonita...');
+    // 🔐 Autenticación Bonita
     const loggedIn = await bonitaService.authenticate(username, password);
     if (!loggedIn) {
       return res.status(500).json({
@@ -189,27 +188,21 @@ router.post('/extension/commitmentsByTask', async (req, res) => {
     }
 
     const url = `${bonitaService.baseURL}/API/extension/commitmentsByTask`;
-    console.log(`🌐 Llamando a Bonita Extension POST ${url}`);
+    console.log(`📡 Llamando a Bonita Extension POST ${url}`);
 
-    // 👇 Enviamos el body en formato JSON plano (como el otro endpoint)
+    // 👇 Enviamos body plano JSON (idéntico al endpoint anterior)
     const response = await axios.post(
       url,
-      {
-        username,
-        password,
-        taskId,
-      },
+      { username, password, taskId },
       {
         headers: {
-          'Cookie': `JSESSIONID=${bonitaService.jsessionId}`,
+          'Cookie': `${bonitaService.jsessionId}`,
           'X-Bonita-API-Token': bonitaService.apiToken,
           'Content-Type': 'application/json',
         },
-        timeout: 15000, // por si tarda la extensión
       }
     );
 
-    // ✅ OK
     res.json({
       success: true,
       data: response.data,
@@ -219,7 +212,6 @@ router.post('/extension/commitmentsByTask', async (req, res) => {
       '❌ Error llamando a extension/commitmentsByTask:',
       error.response?.data || error.message
     );
-
     res.status(500).json({
       success: false,
       message: 'Error llamando a extension/commitmentsByTask',
@@ -227,6 +219,7 @@ router.post('/extension/commitmentsByTask', async (req, res) => {
     });
   }
 });
+
 
 
 
