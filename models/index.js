@@ -6,9 +6,10 @@ const Project = require('./Project');
 const Task = require('./Task');
 const TaskType = require('./TaskType');
 const Commitment = require('./Commitment');
+const Role = require('./Role');
 
 
-// 🔹 1. User tiene muchos Projects (como creador)
+// User tiene muchos Projects (como creador)
 User.hasMany(Project, {
   foreignKey: 'createdBy',
   as: 'createdProjects',
@@ -21,7 +22,7 @@ Project.belongsTo(User, {
   onDelete: 'RESTRICT'
 });
 
-// 🔹 2. Project tiene muchas Tasks
+// Project tiene muchas Tasks
 Project.hasMany(Task, {
   foreignKey: 'projectId',
   as: 'tasks',
@@ -34,7 +35,7 @@ Task.belongsTo(Project, {
   onDelete: 'CASCADE'
 });
 
-// 🔹 3. User puede tomar muchas Tasks (voluntariamente)
+// User puede tomar muchas Tasks (voluntariamente)
 User.hasMany(Task, {
   foreignKey: 'takenBy',
   as: 'takenTasks',
@@ -47,7 +48,7 @@ Task.belongsTo(User, {
   onDelete: 'SET NULL'
 });
 
-// 🔹 4. User crea muchas Tasks
+// User crea muchas Tasks
 User.hasMany(Task, {
   foreignKey: 'createdBy',
   as: 'createdTasks',
@@ -60,7 +61,7 @@ Task.belongsTo(User, {
   onDelete: 'RESTRICT'
 });
 
-// 🔹 5. TaskType tiene muchas Tasks
+// TaskType tiene muchas Tasks
 TaskType.hasMany(Task, {
   foreignKey: 'taskTypeId',
   as: 'tasks',
@@ -73,7 +74,7 @@ Task.belongsTo(TaskType, {
   onDelete: 'RESTRICT'
 });
 
-// 🔹 6. Task tiene muchos Commitments
+// Task tiene muchos Commitments
 Task.hasMany(Commitment, { 
   foreignKey: 'taskId', 
   as: 'commitments' 
@@ -84,7 +85,7 @@ Commitment.belongsTo(Task, {
   as: 'task' 
 });
 
-// 🔹 7. User (ONG) tiene muchos Commitments
+// User (ONG) tiene muchos Commitments
 User.hasMany(Commitment, { 
   foreignKey: 'ongId', 
   as: 'commitments' 
@@ -93,6 +94,21 @@ User.hasMany(Commitment, {
 Commitment.belongsTo(User, { 
   foreignKey: 'ongId', 
   as: 'ong' 
+});
+
+// User tiene muchos Roles (many-to-many)
+User.belongsToMany(Role, {
+  through: 'user_roles',
+  foreignKey: 'userId',
+  otherKey: 'roleId',
+  as: 'roles'
+});
+
+Role.belongsToMany(User, {
+  through: 'user_roles',
+  foreignKey: 'roleId',
+  otherKey: 'userId',
+  as: 'users'
 });
 
 // Función para sincronizar BD
@@ -115,6 +131,9 @@ const syncDatabase = async (options = {}) => {
 
     await sequelize.sync({ force, alter });
     
+    // Crear roles precargados si no existen
+    await seedRoles();
+    
     console.log('Base de datos sincronizada correctamente');
     console.log('Modelos disponibles:', Object.keys(sequelize.models));
     
@@ -135,19 +154,58 @@ const closeConnection = async () => {
   }
 };
 
+// Función para crear roles precargados
+const seedRoles = async () => {
+  try {
+    // Crear roles precargados
+    const rolePrincipal = await Role.findOrCreate({
+      where: { id: 'ONG_PRINCIPAL' },
+      defaults: {
+        id: 'ONG_PRINCIPAL',
+        name: 'Ong Principal'
+      }
+    });
+
+    const roleColaboradora = await Role.findOrCreate({
+      where: { id: 'ONG_COLABORADORA' },
+      defaults: {
+        id: 'ONG_COLABORADORA',
+        name: 'Ong Colaboradora'
+      }
+    });
+
+    const roleGerencial = await Role.findOrCreate({
+      where: { id: 'ONG_GERENCIAL' },
+      defaults: {
+        id: 'ONG_GERENCIAL',
+        name: 'Ong Gerencial'
+      }
+    });
+
+    console.log('✅ Roles precargados verificados/creados');
+  } catch (error) {
+    console.error('Error creando roles precargados:', error.message);
+  }
+};
+
 // Función para poblar datos de prueba
 const seedData = async () => {
   try {
+    // Crear roles precargados (si no existen ya)
+    await seedRoles();
+    
+    // Obtener roles para usar en seedData
+    const rolePrincipal = await Role.findByPk('ONG_PRINCIPAL');
+    const roleColaboradora = await Role.findByPk('ONG_COLABORADORA');
+    const roleGerencial = await Role.findByPk('ONG_GERENCIAL');
+    
     // Crear usuarios de prueba (ONGs)
     const adminUser = await User.findOrCreate({
       where: { username: 'admin' },
       defaults: {
         username: 'admin',
-        email: 'admin@project.com',
         password: 'admin123',
         organizationName: 'Administración del Sistema',
-        description: 'Usuario administrador del sistema de gestión de proyectos',
-        role: 'admin'
       }
     });
 
@@ -155,13 +213,8 @@ const seedData = async () => {
       where: { username: 'ong-verde' },
       defaults: {
         username: 'ong-verde',
-        email: 'contacto@ongverde.org',
         password: 'verde123',
         organizationName: 'ONG Verde Futuro',
-        description: 'Organización dedicada a la protección del medio ambiente y sostenibilidad',
-        website: 'https://ongverde.org',
-        phone: '+54-11-1234-5678',
-        role: 'ong'
       }
     });
 
@@ -169,13 +222,8 @@ const seedData = async () => {
       where: { username: 'ayuda-social' },
       defaults: {
         username: 'ayuda-social',
-        email: 'info@ayudasocial.org',
         password: 'social123',
         organizationName: 'Fundación Ayuda Social',
-        description: 'Fundación dedicada a la ayuda social y desarrollo comunitario',
-        website: 'https://ayudasocial.org',
-        phone: '+54-11-9876-5432',
-        role: 'ong'
       }
     });
 
@@ -183,13 +231,8 @@ const seedData = async () => {
       where: { username: 'colaborador-tech' },
       defaults: {
         username: 'colaborador-tech',
-        email: 'tech@colaborador.com',
         password: 'tech123',
         organizationName: 'Tech Volunteers',
-        description: 'Grupo de voluntarios tecnológicos que colaboran en proyectos de ONGs',
-        website: 'https://techvolunteers.org',
-        phone: '+54-11-5555-1234',
-        role: 'collaborator'
       }
     });
 
@@ -239,7 +282,7 @@ const seedData = async () => {
         estimatedHours: 20,
         actualHours: 18,
         projectId: sampleProject[0].id,
-        takenBy: colaborador[0].id, // Ya se hizo cargo esta ONG
+        takenBy: colaborador[0].id,
         createdBy: ongAmbiental[0].id,
         taskTypeId: tipoEconomico[0].id
       }
@@ -250,12 +293,12 @@ const seedData = async () => {
       defaults: {
         title: 'Compra de plantines',
         description: 'Adquirir 1000 plantines de especies nativas apropiadas para el clima urbano',
-        status: 'todo', // Disponible para que alguien se haga cargo
+        status: 'todo',
         dueDate: new Date('2025-03-01'),
         estimatedHours: 8,
         actualHours: 0,
         projectId: sampleProject[0].id,
-        takenBy: null, // Nadie se hizo cargo aún
+        takenBy: null,
         createdBy: ongAmbiental[0].id,
         taskTypeId: tipoMateriales[0].id
       }
@@ -275,7 +318,8 @@ module.exports = {
     Project,
     Task,
     TaskType,
-    Commitment
+    Commitment,
+    Role
   },
   syncDatabase,
   closeConnection,

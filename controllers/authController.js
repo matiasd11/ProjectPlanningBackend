@@ -1,5 +1,7 @@
-const { generateToken, verifyToken } = require('../middleware/auth');
+const { generateToken } = require('../middleware/auth');
 const bonitaService = require('../services/bonitaService');
+const { models } = require('../models');
+const { User, Role } = models;
 
 const authController = {
   
@@ -16,18 +18,32 @@ const authController = {
         });
       }
 
+      // Verificar si el usuario existe en Bonita
       const sessionData = await bonitaService.login(username, password);
 
       if (!sessionData || !sessionData.session_id) {
         return res.status(401).json({ message: "Credenciales inválidas" });
       }
 
-      //const roles = await bonitaService.getUserRoles(username);
+      // Verificar si el usuario existe en la base de datos local e incluir sus roles
+      const user = await User.findOne({
+        where: { username },
+        include: [{
+          model: Role,
+          as: 'roles',
+          attributes: ['id', 'name'],
+          through: { attributes: [] } // No incluir datos de la tabla intermedia
+        }]
+      });
+      
+      if (!user) {
+        return res.status(401).json({ message: "Usuario no encontrado" });
+      }
 
       // Generar token con información del usuario
       const tokenPayload = {
         username: username,
-        // role: user.role,
+        userId: user.id,
         iat: Math.floor(Date.now() / 1000)
       };
 
@@ -37,12 +53,9 @@ const authController = {
         success: true,
         message: 'Autenticación exitosa',
         data: {
+          user: user.toSafeJSON(),
           token,
-          user: {
-            username: username,
-            bonitaSession: sessionData.session_id
-          },
-          // bonitaApiToken: bonitaService.apiToken
+          bonitaSession: sessionData.session_id
         }
       });
 
@@ -54,8 +67,8 @@ const authController = {
         error: error.message
       });
     }
-  },
+  }
 
-};
+}
 
 module.exports = authController;

@@ -64,62 +64,37 @@ class BonitaService {
     }
   }
 
-  // Autenticación con Bonita
-  // async authenticate(username, password) {
-  //   try {
-  //     console.log('🔐 DEBUG: Intentando autenticación con Bonita...');
-  //     console.log('🌐 URL:', `${this.baseURL}/loginservice`);
-  //     console.log('👤 Credenciales:', `username=${username}&password=${password}`);
-
-  //     const response = await axios.post(`${this.baseURL}/loginservice`,
-  //       `username=${this.username}&password=${password}&redirect=false`,
-  //       {
-  //         headers: {
-  //           'Content-Type': 'application/x-www-form-urlencoded'
-  //         },
-  //         withCredentials: true
-  //       }
-  //     );
-
-  //     // Extraer tokens de las cookies
-  //     const cookies = response.headers['set-cookie'];
-  //     if (cookies) {
-  //       // Buscar JSESSIONID
-  //       const sessionCookie = cookies.find(cookie => cookie.includes('JSESSIONID'));
-  //       if (sessionCookie) {
-  //         this.jsessionId = sessionCookie.split(';')[0];
-  //       }
-
-  //       // Buscar X-Bonita-API-Token
-  //       const apiTokenCookie = cookies.find(cookie => cookie.includes('X-Bonita-API-Token'));
-  //       if (apiTokenCookie) {
-  //         this.apiToken = apiTokenCookie.split('=')[1].split(';')[0];
-  //       }
-  //     }
-
-  //     if (this.apiToken && this.jsessionId) {
-  //       console.log('Autenticado con Bonita BPM');
-  //       console.log('API Token:', this.apiToken);
-  //       console.log('Session ID:', this.jsessionId);
-  //       return true;
-  //     }
-
-  //     throw new Error('No se pudo obtener el token de API o session ID');
-  //   } catch (error) {
-  //     console.error('Error autenticando con Bonita:', error.message);
-  //     return false;
-  //   }
-  // }
-
-
-  async getUserRoles(username) {
+  async createUser(user) {
     try {
-      const response = await axios.get(`${this.baseURL}/API/identity/user?p=0&c=100&f=username=${username}`);
 
-      return response.data.roles || [];
+      if (!this.apiToken) {
+        await this.authenticate();
+      }
+
+      const response = await axios.post(
+        `${this.baseURL}/API/identity/user`, 
+          {
+            userName: user.username,
+            password: user.password,
+            firstname: user.organizationName,
+            lastname: user.organizationName,
+            enabled: 'true'
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Bonita-API-Token': this.apiToken,
+              'Cookie': this.jsessionId,
+            }
+          }
+        );
+
+        console.log('✅ Usuario creado en Bonita:', response.data);
+        
+      return response.data;
     } catch (error) {
-      console.error("Error obteniendo roles de Bonita:", error.message);
-      return [];
+      console.error('Error creando usuario en Bonita:', error.message);
+      throw error;
     }
   }
 
@@ -209,8 +184,6 @@ class BonitaService {
     }
   }
 
-
-
   // Mapear datos del proyecto a variables de Bonita (formato simple para debugging)
   mapProjectDataToBonitaVariables(projectData) {
     const variables = {
@@ -227,7 +200,7 @@ class BonitaService {
     return variables;
   }
 
-  // ✅ NUEVO: Mapear datos de TAREA COVERAGE REQUEST a variables de Bonita
+  // Mapear datos de TAREA COVERAGE REQUEST a variables de Bonita
   mapTaskCoverageRequestToBonitaVariables(taskData) {
     // Variables que coinciden EXACTAMENTE con las definidas en Bonita Studio
     const variables = {
@@ -260,7 +233,7 @@ class BonitaService {
     return variables;
   }
 
-  // ✅ NUEVO: Iniciar proceso específico para Coverage Request de tarea
+  // Iniciar proceso específico para Coverage Request de tarea
   async startCoverageRequestProcess(taskData) {
     try {
       if (!this.apiToken) {
@@ -306,7 +279,7 @@ class BonitaService {
     }
   }
 
-  // ✅ NUEVO: Crear caso único para todas las coverage requests del proyecto
+  // Crear caso único para todas las coverage requests del proyecto
   async startBatchCoverageRequestProcess(projectData) {
     try {
       if (!this.apiToken) {
@@ -373,7 +346,7 @@ class BonitaService {
     }
   }
 
-  // ✅ Auto-completar primera tarea del caso único
+  // Auto-completar primera tarea del caso único
   async autoCompleteBatchFirstTask(caseId) {
     try {
       console.log('⚡ Auto-completando primera tarea del caso único...');
@@ -702,8 +675,6 @@ class BonitaService {
     }
   }
 
-
-
   // Completa la tarea luego de actualizar variables
   async completeTaskWithVariables(taskId, caseId, taskVariables) {
     try {
@@ -764,9 +735,11 @@ class BonitaService {
     }
   }
 
-  // ===============================
+
+
+  // =================================================
   // MÉTODOS PARA OBTENER TAREAS DEL CLOUD VIA BONITA
-  // ===============================
+  // =================================================
 
   /**
    * Obtiene las tareas del cloud que Bonita ya recuperó
