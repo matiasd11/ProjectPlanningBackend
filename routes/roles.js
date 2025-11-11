@@ -4,8 +4,10 @@ const router = express.Router();
 
 
 // GET - Obtener todos los roles
-router.get('/', roleController.getRoles);
+router.get('/all', roleController.getAllRoles);
 
+// GET - Obtener roles de un usuario
+router.get('/username', roleController.getRolesByUsername);
 
 module.exports = router;
 

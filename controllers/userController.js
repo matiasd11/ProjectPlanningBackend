@@ -1,5 +1,5 @@
 const { models } = require('../models');
-const { User, Project, Role } = models;
+const { User, Project } = models;
 const bonitaService = require('../services/bonitaService');
 const { validatePasswordStrength } = require('../validators/passwordValidator');
 
@@ -41,18 +41,8 @@ const userController = {
         password,
         roles,
         organizationName,
-        // email,
-        // description,
-        // website,
-        // phone,
       } = req.body;
 
-
-      // Crear usuario en Bonita
-      await bonitaService.createUser({username, password, organizationName});
-
-
-      // Crear usuario en la base de datos
       // Validar que se proporcionen roles
       if (!roles || !Array.isArray(roles) || roles.length === 0) {
         return res.status(400).json({
@@ -72,50 +62,13 @@ const userController = {
         });
       }
 
-      // Validar que los roles existan en la base de datos
-      const validRoles = await Role.findAll({
-        where: {
-          id: roles
-        }
-      });
-
-      if (validRoles.length !== roles.length) {
-        return res.status(400).json({
-          success: false,
-          message: 'Los roles proporcionados no son válidos',
-          errors: 'Los roles proporcionados no son válidos'
-        });
-      }
-
-      // Crear usuario
-      const user = await User.create({
-        username,
-        password,
-        organizationName,
-        // email,
-        // description,
-        // website,
-        // phone,
-      });
-
-      // Asignar roles al usuario
-      await user.setRoles(validRoles);
-
-      // Obtener usuario con roles para la respuesta
-      const userWithRoles = await User.findByPk(user.id, {
-        attributes: { exclude: ['password'] },
-        include: [{
-          model: Role,
-          as: 'roles',
-          attributes: ['id', 'name']
-        }]
-      });
+      // Crear usuario en Bonita
+      const bonitaUser = await bonitaService.createUser({ username, password, organizationName, roles });
 
       res.status(201).json({
         success: true,
         message: 'ONG registrada exitosamente',
-        data: userWithRoles
-        // data: user.toSafeJSON()
+        data: bonitaUser
       });
     } catch (error) {
       console.error('Error creating user:', error);

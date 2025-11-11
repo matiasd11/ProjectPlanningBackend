@@ -6,6 +6,7 @@ class BonitaService {
     this.apiToken = null;
     this.jsessionId = null;
     this.processDefinitionId = process.env.BONITA_PROCESS_ID || null;
+    this.groupName = "acme";
   }
 
   async login(username, password) {
@@ -15,7 +16,11 @@ class BonitaService {
       throw new Error("No se pudo autenticar con Bonita");
     }
 
+    const bonitaUser = await this.getBonitaUser(username);
+    console.log('Usuario obtenido en Bonita', bonitaUser);
+
     return {
+      user: bonitaUser,
       session_id: this.jsessionId,
       apiToken: this.apiToken
     };
@@ -67,11 +72,37 @@ class BonitaService {
   async createUser(user) {
     try {
 
-      if (!this.apiToken) {
-        await this.authenticate();
-      }
+      // Admin login
+      const adminLogin = await axios.post(
+        `${this.baseURL}/loginservice`,
+        'username=walter.bates&password=bpm',
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      );
 
-      const response = await axios.post(
+      let adminApiToken = adminLogin.headers['x-bonita-api-token'];
+      const cookieHeader = adminLogin.headers['set-cookie'].find(c => c.startsWith('JSESSIONID'));
+      const adminJsessionId = cookieHeader.split(';')[0];
+
+      if (!adminApiToken) {
+        const tokenCookie = adminLogin.headers['set-cookie'].find(c => c.startsWith('X-Bonita-API-Token'));
+        if (tokenCookie) {
+          adminApiToken = tokenCookie.split('=')[1].split(';')[0];
+        }
+      }
+      console.log('✅ Admin login exitoso');
+      console.log('🔑 API Token admin:', adminApiToken);
+      console.log('🆔 JSESSIONID admin:', adminJsessionId);
+
+      const headers = {
+        "X-Bonita-API-Token": adminApiToken,
+        "Cookie": `${adminJsessionId}; X-Bonita-API-Token=${adminApiToken}`,
+        "Content-Type": "application/json",
+      };
+
+
+
+      // 1️⃣ Crear usuario en Bonita
+      const userRes = await axios.post(
         `${this.baseURL}/API/identity/user`, 
           {
             userName: user.username,
@@ -80,21 +111,314 @@ class BonitaService {
             lastname: user.organizationName,
             enabled: 'true'
           },
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Bonita-API-Token': this.apiToken,
-              'Cookie': this.jsessionId,
-            }
-          }
+          { headers }
         );
+        const userId = userRes.data.id;
+        console.log(`✅ Usuario creado con ID ${userId}`);
 
-        console.log('✅ Usuario creado en Bonita:', response.data);
+
+
+      // 2️⃣ Traer todos los roles disponibles
+      console.log("📦 Obteniendo todos los roles de Bonita...");
+      const allRolesRes = await axios.get(`${this.baseURL}/API/identity/role?p=0&c=1000`, { headers });
+      const allRoles = allRolesRes.data;
+      console.log(`✅ ${allRoles.length} roles encontrados.`);
+
+
+
+      // 3️⃣ Buscar grupo por defecto en Bonita
+      console.log(`🔍 Buscando grupo "${this.groupName}"...`);
+      const groupRes = await axios.get(`${this.baseURL}/API/identity/group?f=name=${this.groupName}`, { headers });
+      if (groupRes.data.length === 0) throw new Error(`Grupo "${this.groupName}" no encontrado`);
+      const groupId = groupRes.data[0].id;
+
+
+
+      // 4️⃣ Asignar roles
+      for (const roleName of user.roles) {
+        const role = allRoles.find(r => r.name === roleName);
+        if (!role) {
+          console.warn(`⚠️ Rol "${roleName}" no existe en Bonita, se omite.`);
+          continue;
+        }
+
+        console.log(`🧩 Asignando rol "${roleName}" al usuario ${user.username}...`);
+        await axios.post(
+          `${this.baseURL}/API/identity/membership`,
+          {
+            user_id: userId,
+            role_id: role.id,
+            group_id: groupId,
+          },
+          { headers }
+        );
+      }
+      console.log(`✅ memberships creadas exitosamente.`);
+
+
+
+      // 5️⃣ Obtener usuario con roles asignados
+      const bonitaUser = await this.getBonitaUser(user.username);
+      console.log('Usuario obtenido en Bonita', bonitaUser);
+      return bonitaUser;
         
-      return response.data;
     } catch (error) {
       console.error('Error creando usuario en Bonita:', error.message);
       throw error;
+    }
+  }
+
+  async getBonitaUser(username) {
+    try {
+      // Admin login
+      const adminLogin = await axios.post(
+        `${this.baseURL}/loginservice`,
+        'username=walter.bates&password=bpm',
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      );
+
+      let adminApiToken = adminLogin.headers['x-bonita-api-token'];
+      const cookieHeader = adminLogin.headers['set-cookie'].find(c => c.startsWith('JSESSIONID'));
+      const adminJsessionId = cookieHeader.split(';')[0];
+
+      if (!adminApiToken) {
+        const tokenCookie = adminLogin.headers['set-cookie'].find(c => c.startsWith('X-Bonita-API-Token'));
+        if (tokenCookie) {
+          adminApiToken = tokenCookie.split('=')[1].split(';')[0];
+        }
+      }
+      console.log('✅ Admin login exitoso');
+      console.log('🔑 API Token admin:', adminApiToken);
+      console.log('🆔 JSESSIONID admin:', adminJsessionId);
+
+      const headers = {
+        "X-Bonita-API-Token": adminApiToken,
+        "Cookie": `${adminJsessionId}; X-Bonita-API-Token=${adminApiToken}`,
+        "Content-Type": "application/json",
+      };
+
+      // 1️⃣ Buscar usuario en Bonita por username
+      console.log(`🔍 Buscando usuario "${username}" en Bonita...`);
+      const userRes = await axios.get(
+        `${this.baseURL}/API/identity/user?p=0&c=100&f=username=${username}`,
+        { headers }
+      );
+
+      if (!userRes.data.length) {
+        throw new Error(`Usuario "${username}" no encontrado en Bonita`);
+      }
+
+      const user = userRes.data.find(u =>
+        (u.username && u.username.toLowerCase() === username.toLowerCase()) ||
+        (u.userName && u.userName.toLowerCase() === username.toLowerCase())
+      );
+
+      if (!user) {
+        throw new Error(`Usuario exacto "${username}" no encontrado en Bonita`);
+      }
+
+      console.log(`✅ Usuario encontrado con ID ${user.id}`);
+
+      // 2️⃣ Obtener memberships del usuario
+      console.log(`📦 Obteniendo memberships del usuario...`);
+      const membershipsRes = await axios.get(
+        `${this.baseURL}/API/identity/membership?f=user_id=${user.id}`,
+        { headers }
+      );
+
+      // 3️⃣ Obtener información completa de cada rol
+      const assignedRoles = [];
+      if (membershipsRes.data && membershipsRes.data.length > 0) {
+        console.log(`🔄 Obteniendo información de ${membershipsRes.data.length} roles...`);
+        const rolesData = await Promise.all(
+          membershipsRes.data.map(async (membership) => {
+            try {
+              const roleRes = await axios.get(
+                `${this.baseURL}/API/identity/role/${membership.role_id}`,
+                { headers }
+              );
+              return {
+                name: roleRes.data.name,
+                displayName: roleRes.data.displayName || roleRes.data.name
+              };
+            } catch (error) {
+              console.warn(`⚠️ Error obteniendo rol ${membership.role_id}:`, error.message);
+              return null;
+            }
+          })
+        );
+        
+        // Filtrar roles nulos
+        assignedRoles.push(...rolesData.filter(role => role !== null));
+      }
+
+      console.log(`✅ ${assignedRoles.length} roles encontrados para el usuario`);
+
+      // Retornar estructura formateada (misma que createUser)
+      return {
+        id: user.id,
+        firstname: user.firstname,
+        lastname: user.lastname,
+        userName: user.userName || user.username,
+        roles: assignedRoles
+      };
+
+    } catch (error) {
+      console.error('Error obteniendo usuario de Bonita:', error.message);
+      throw error;
+    }
+  }
+
+  async getAllRoles() {
+    try {
+      console.log(`🔍 Obteniendo roles de Bonita`);
+
+      console.log('🔐 Logueando como admin para obtener todos los roles');
+      const adminLogin = await axios.post(
+        `${this.baseURL}/loginservice`,
+        'username=walter.bates&password=bpm&redirect=false',
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      );
+
+      let apiToken = adminLogin.headers['x-bonita-api-token'];
+      const cookieHeader = adminLogin.headers['set-cookie'].find(c => c.startsWith('JSESSIONID'));
+      const jsessionId = cookieHeader.split(';')[0];
+
+      if (!apiToken) {
+        const tokenCookie = adminLogin.headers['set-cookie'].find(c => c.startsWith('X-Bonita-API-Token'));
+        if (tokenCookie) {
+          apiToken = tokenCookie.split('=')[1].split(';')[0];
+        }
+      }
+
+      console.log('✅ Admin login exitoso');
+      console.log('🔑 API Token admin:', apiToken);
+      console.log('🆔 JSESSIONID admin:', jsessionId);
+
+      console.log(`📡 Request a API/identity/role`);
+      const response = await axios.get(
+        `${this.baseURL}/API/identity/role?p=0&c=100`,
+        {
+          headers: {
+            'Cookie': `${jsessionId}; X-Bonita-API-Token=${apiToken}`,
+            'X-Bonita-API-Token': apiToken,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log('✅ Roles obtenidos:', response.data);
+      return response.data;
+
+    } catch (error) {
+      if (error.response) {
+        console.error("❌ Error obteniendo roles de Bonita:", error.response.status, error.response.data);
+      } else if (error.request) {
+        console.error("❌ Error obteniendo roles de Bonita: No hubo respuesta del servidor", error.request);
+      } else {
+        console.error("❌ Error obteniendo roles de Bonita:", error.message);
+      }
+      return [];
+    }
+  }
+
+  async getRolesByUsername(username) {
+    try {
+      console.log(`🔍 Obteniendo roles para el usuario: ${username}`);
+
+      console.log('🔐 Logueando como admin para obtener datos de usuarios');
+      const adminLogin = await axios.post(
+        `${this.baseURL}/loginservice`,
+        'username=walter.bates&password=bpm',
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      );
+
+      let apiToken = adminLogin.headers['x-bonita-api-token'];
+      const cookieHeader = adminLogin.headers['set-cookie'].find(c => c.startsWith('JSESSIONID'));
+      const jsessionId = cookieHeader.split(';')[0];
+
+      if (!apiToken) {
+        const tokenCookie = adminLogin.headers['set-cookie'].find(c => c.startsWith('X-Bonita-API-Token'));
+        if (tokenCookie) {
+          apiToken = tokenCookie.split('=')[1].split(';')[0];
+        }
+      }
+
+      console.log('✅ Admin login exitoso');
+      console.log('🔑 API Token admin:', apiToken);
+      console.log('🆔 JSESSIONID admin:', jsessionId);
+
+
+      console.log(`📡 Request a API/identity/user para username=${username}`);
+      const userResponse = await axios.get(
+        `${this.baseURL}/API/identity/user?p=0&c=100&f=username=${username}`,
+        {
+          headers: {
+            Cookie: jsessionId,
+            'X-Bonita-API-Token': apiToken,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!userResponse.data.length) {
+        console.warn(`⚠️ Usuario ${username} no encontrado.`);
+        return [];
+      }
+
+      const user = userResponse.data.find(u =>
+        (u.username && u.username.toLowerCase() === username.toLowerCase()) ||
+        (u.userName && u.userName.toLowerCase() === username.toLowerCase())
+      );
+
+      if (!user) {
+        console.warn(`⚠️ Usuario exacto "${username}" no encontrado.`);
+        return [];
+      }
+
+      const userId = user.id;
+      console.log(`🆔 userId dinámico obtenido: ${userId}`);
+
+      console.log(`📡 Request a API/identity/membership para user_id=${userId}`);
+      const membershipsRes = await axios.get(
+        `${this.baseURL}/API/identity/membership?f=user_id=${userId}`,
+        {
+          headers: {
+            Cookie: jsessionId,
+            'X-Bonita-API-Token': apiToken,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log(`🔄 Obteniendo memberships de usuario ID ${userId}`);
+      const roles = await Promise.all(
+        membershipsRes.data.map(async m => {
+          const roleRes = await axios.get(`${this.baseURL}/API/identity/role/${m.role_id}`, {
+            headers: {
+              Cookie: jsessionId,
+              'X-Bonita-API-Token': apiToken,
+              'Content-Type': 'application/json'
+            }
+          });
+          console.log(`🎯 Role encontrado: ${roleRes.data.displayName || roleRes.data.name}`);
+          return roleRes.data.displayName || roleRes.data.name;
+        })
+      );
+
+      console.log(`🔍 Obteniendo roles para usuario "${username}" usando API Token: ${apiToken} y JSESSIONID: ${jsessionId}`);
+
+      return roles;
+
+    } catch (error) {
+      if (error.response) {
+        console.error("❌ Error obteniendo roles de Bonita:", error.response.status, error.response.data, userResponse.data.map(u => u.username));
+      } else if (error.request) {
+        console.error("❌ Error obteniendo roles de Bonita: No hubo respuesta del servidor", error.request);
+      } else {
+        console.error("❌ Error obteniendo roles de Bonita:", error.message);
+      }
+      return [];
     }
   }
 

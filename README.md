@@ -130,28 +130,6 @@ const config = {
 - `GET /api/v1/bonita/cases/:caseId/variables` - Get case variables
 - `GET /api/v1/bonita/status` - Bonita status
 
-## Test Users
-
-Auto-created on startup:
-
-```javascript
-// Use ownerId: 2 for testing
-{
-  id: 2,
-  username: "ong-verde", 
-  email: "contacto@ongverde.org",
-  organizationName: "ONG Verde Futuro",
-  role: "ong"
-}
-
-// Admin user (id: 1)
-{
-  username: "admin",
-  email: "admin@project.com", 
-  role: "admin"
-}
-```
-
 ## Docker Commands
 
 ```bash

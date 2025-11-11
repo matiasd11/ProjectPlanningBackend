@@ -1,7 +1,6 @@
 const { generateToken } = require('../middleware/auth');
 const bonitaService = require('../services/bonitaService');
 const { models } = require('../models');
-const { User, Role } = models;
 
 const authController = {
   
@@ -25,25 +24,10 @@ const authController = {
         return res.status(401).json({ message: "Credenciales inválidas" });
       }
 
-      // Verificar si el usuario existe en la base de datos local e incluir sus roles
-      const user = await User.findOne({
-        where: { username },
-        include: [{
-          model: Role,
-          as: 'roles',
-          attributes: ['id', 'name'],
-          through: { attributes: [] } // No incluir datos de la tabla intermedia
-        }]
-      });
-      
-      if (!user) {
-        return res.status(401).json({ message: "Usuario no encontrado" });
-      }
-
       // Generar token con información del usuario
       const tokenPayload = {
-        username: username,
-        userId: user.id,
+        username: sessionData.user.userName,
+        userId: sessionData.user.id,
         iat: Math.floor(Date.now() / 1000)
       };
 
@@ -53,9 +37,8 @@ const authController = {
         success: true,
         message: 'Autenticación exitosa',
         data: {
-          user: user.toSafeJSON(),
           token,
-          bonitaSession: sessionData.session_id
+          user: sessionData.user,
         }
       });
 
