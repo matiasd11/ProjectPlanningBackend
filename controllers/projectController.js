@@ -5,6 +5,44 @@ const { sequelize } = require('../config/database');
 
 const projectController = {
 
+  getProjects: async (req, res) => {
+    try {
+      const { status, createdBy } = req.body;
+      const { Op } = require('sequelize');
+
+      console.log('📥 Body recibido:', { status, createdBy, statusType: typeof status, createdByType: typeof createdBy });
+
+      const where = {};
+  
+      if (status) {
+        where.status = {
+          [Op.in]: statusArray
+        };
+        console.log('🔍 Filtrando por status:', statusArray);
+      }
+
+      if (createdBy) {
+        where.createdBy = createdBy;
+      }
+
+      const projects = await Project.findAll({
+        where,
+        order: [['created_at', 'DESC']]
+      });
+
+      res.json({
+        success: true,
+        data: projects,
+      });
+    } catch (error) {
+      console.error('Error getting projects:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error obteniendo proyectos'
+      });
+    }
+  },
+
   createProject: async (req, res) => {
     const transaction = await sequelize.transaction();
 

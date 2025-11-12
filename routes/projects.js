@@ -6,40 +6,8 @@ const router = express.Router();
 const projectController = require('../controllers/projectController');
 
 
-// GET - Listar proyectos por ONG y/o status
-router.get('/', async (req, res) => {
-  try {
-    const { status, ownerId } = req.body;
-    const { Op } = require('sequelize');
-
-    const where = {};
-    
-    // Filtrar por array de status
-    if (status && status.length > 0) {
-      where.status = {
-        [Op.in]: status
-      };
-    }
-    
-    if (ownerId) where.ownerId = ownerId;
-
-    const projects = await Project.findAll({
-      where,
-      order: [['created_at', 'DESC']]
-    });
-
-    res.json({
-      success: true,
-      data: projects,
-    });
-  } catch (error) {
-    console.error('Error getting projects:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error obteniendo proyectos'
-    });
-  }
-});
+// POST - Listar proyectos por ONG y/o status
+router.post('/filter', projectController.getProjects);
 
 // GET - Listar proyectos
 // router.get('/', async (req, res) => {
