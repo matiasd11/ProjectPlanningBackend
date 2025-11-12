@@ -16,9 +16,9 @@ const projectController = {
   
       if (status) {
         where.status = {
-          [Op.in]: statusArray
+          [Op.in]: status
         };
-        console.log('🔍 Filtrando por status:', statusArray);
+        console.log('🔍 Filtrando por status:', status);
       }
 
       if (createdBy) {
