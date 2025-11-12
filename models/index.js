@@ -1,4 +1,6 @@
 const { sequelize, testConnection } = require('../config/database');
+const userController = require('../controllers/userController');
+const bonitaService = require('../services/bonitaService');
 
 // Importar todos los modelos
 const User = require('./User');
@@ -6,7 +8,6 @@ const Project = require('./Project');
 const Task = require('./Task');
 const TaskType = require('./TaskType');
 const Commitment = require('./Commitment');
-const Role = require('./Role');
 
 
 // User tiene muchos Projects (como creador)
@@ -96,20 +97,7 @@ Commitment.belongsTo(User, {
   as: 'ong' 
 });
 
-// User tiene muchos Roles (many-to-many)
-User.belongsToMany(Role, {
-  through: 'user_roles',
-  foreignKey: 'userId',
-  otherKey: 'roleId',
-  as: 'roles'
-});
 
-Role.belongsToMany(User, {
-  through: 'user_roles',
-  foreignKey: 'roleId',
-  otherKey: 'userId',
-  as: 'users'
-});
 
 // Función para sincronizar BD
 const syncDatabase = async (options = {}) => {
@@ -121,7 +109,7 @@ const syncDatabase = async (options = {}) => {
     }
 
     // Sincronizar modelos
-    const { force = false, alter = false } = options;
+    const { force = true, alter = false } = options;
     
     if (force) {
       console.log('⚠️  RECREANDO todas las tablas...');
@@ -131,8 +119,6 @@ const syncDatabase = async (options = {}) => {
 
     await sequelize.sync({ force, alter });
     
-    // Crear roles precargados si no existen
-    await seedRoles();
     
     console.log('Base de datos sincronizada correctamente');
     console.log('Modelos disponibles:', Object.keys(sequelize.models));
@@ -154,87 +140,10 @@ const closeConnection = async () => {
   }
 };
 
-// Función para crear roles precargados
-const seedRoles = async () => {
-  try {
-    // Crear roles precargados
-    const rolePrincipal = await Role.findOrCreate({
-      where: { id: 'ONG_PRINCIPAL' },
-      defaults: {
-        id: 'ONG_PRINCIPAL',
-        name: 'Ong Principal'
-      }
-    });
-
-    const roleColaboradora = await Role.findOrCreate({
-      where: { id: 'ONG_COLABORADORA' },
-      defaults: {
-        id: 'ONG_COLABORADORA',
-        name: 'Ong Colaboradora'
-      }
-    });
-
-    const roleGerencial = await Role.findOrCreate({
-      where: { id: 'ONG_GERENCIAL' },
-      defaults: {
-        id: 'ONG_GERENCIAL',
-        name: 'Ong Gerencial'
-      }
-    });
-
-    console.log('✅ Roles precargados verificados/creados');
-  } catch (error) {
-    console.error('Error creando roles precargados:', error.message);
-  }
-};
 
 // Función para poblar datos de prueba
 const seedData = async () => {
   try {
-    // Crear roles precargados (si no existen ya)
-    await seedRoles();
-    
-    // Obtener roles para usar en seedData
-    const rolePrincipal = await Role.findByPk('ONG_PRINCIPAL');
-    const roleColaboradora = await Role.findByPk('ONG_COLABORADORA');
-    const roleGerencial = await Role.findByPk('ONG_GERENCIAL');
-    
-    // Crear usuarios de prueba (ONGs)
-    const adminUser = await User.findOrCreate({
-      where: { username: 'admin' },
-      defaults: {
-        username: 'admin',
-        password: 'admin123',
-        organizationName: 'Administración del Sistema',
-      }
-    });
-
-    const ongAmbiental = await User.findOrCreate({
-      where: { username: 'ong-verde' },
-      defaults: {
-        username: 'ong-verde',
-        password: 'verde123',
-        organizationName: 'ONG Verde Futuro',
-      }
-    });
-
-    const ongSocial = await User.findOrCreate({
-      where: { username: 'ayuda-social' },
-      defaults: {
-        username: 'ayuda-social',
-        password: 'social123',
-        organizationName: 'Fundación Ayuda Social',
-      }
-    });
-
-    const colaborador = await User.findOrCreate({
-      where: { username: 'colaborador-tech' },
-      defaults: {
-        username: 'colaborador-tech',
-        password: 'tech123',
-        organizationName: 'Tech Volunteers',
-      }
-    });
 
     // Crear tipos de tarea
     const tipoEconomico = await TaskType.findOrCreate({
@@ -257,52 +166,178 @@ const seedData = async () => {
       defaults: { title: 'Logístico' }
     });
 
+    const tipoConstruccionViviendas = await TaskType.findOrCreate({
+      where: { title: 'Construcción de viviendas de emergencia' },
+      defaults: { title: 'Construcción de viviendas de emergencia' }
+    });
+
+    const tipoEnergia = await TaskType.findOrCreate({
+      where: { title: 'Instalación de paneles solares o eólicos' },
+      defaults: { title: 'Instalación de paneles solares o eólicos' }
+    });
+
+    const tipoDonacionMateriales = await TaskType.findOrCreate({
+      where: { title: 'Donación de materiales de construcción' },
+      defaults: { title: 'Donación de materiales de construcción' }
+    });
+
+    const tipoReforestacion = await TaskType.findOrCreate({
+      where: { title: 'Reforestación o plantación de árboles' },
+      defaults: { title: 'Reforestación o plantación de árboles' }
+    });
+
+    const tipoGestionResiduos = await TaskType.findOrCreate({
+      where: { title: 'Gestión de residuos y reciclaje' },
+      defaults: { title: 'Gestión de residuos y reciclaje' }
+    });
+
+    const tipoTecnologico = await TaskType.findOrCreate({
+      where: { title: 'Equipamiento informático o tecnológico' },
+      defaults: { title: 'Equipamiento informático o tecnológico' }
+    });
+
+    // Crear grupo ONGs en Bonita
+    await bonitaService.createBonitaGroup();
+
+    await bonitaService.createRoleIfNotExists(
+      'ONG_PRINCIPAL',
+      'ONG Principal',
+      'Usuario encargado de crear proyectos'
+    );
+
+    await bonitaService.createRoleIfNotExists(
+      'ONG_COLABORADORA',
+      'ONG Colaboradora',
+      'Usuario encargado de colaborar en proyectos'
+    );
+
+    await bonitaService.createRoleIfNotExists(
+      'ONG_GERENCIAL',
+      'ONG Gerencial',
+      'Usuario encargado de monitorear proyectos'
+    );
+
+    await bonitaService.createRoleIfNotExists(
+      'ONG_SUPERVISORA',
+      'ONG Supervisora',
+      'Usuario encargado de crear, coordinar y monitorear proyectos'
+    );
+
+
+    // Crear usuarios de prueba en Bonita y guardar sus respuestas
+    let bonitaUsers = [];
+    
+    let ongSupervisora = await bonitaService.createUser({
+      username: 'ongSupervisora',
+      password: 'ongSupervisora123!',
+      organizationName: 'ongSupervisora',
+      roles: ['ONG_SUPERVISORA']
+    });
+    bonitaUsers.push(ongSupervisora);
+
+    let ongPrincipal = await bonitaService.createUser({
+      username: 'ongPrincipal',
+      password: 'ongPrincipal123!',
+      organizationName: 'ongPrincipal',
+      roles: ['ONG_PRINCIPAL']
+    });
+    bonitaUsers.push(ongPrincipal);
+
+    let ongColaboradora = await bonitaService.createUser({
+      username: 'ongColaboradora',
+      password: 'ongColaboradora123!',
+      organizationName: 'ongColaboradora',
+      roles: ['ONG_COLABORADORA']
+    });
+    bonitaUsers.push(ongColaboradora);
+
+    let ongColaboradora2 = await bonitaService.createUser({
+      username: 'ongColaboradora2',
+      password: 'ongColaboradora123!',
+      organizationName: 'ongColaboradora2',
+      roles: ['ONG_COLABORADORA']
+    });
+    bonitaUsers.push(ongColaboradora2);
+
+    let ongGerencial = await bonitaService.createUser({
+      username: 'ongGerencial',
+      password: 'ongGerencial123!',
+      organizationName: 'ongGerencial',
+      roles: ['ONG_GERENCIAL']
+    });
+    bonitaUsers.push(ongGerencial);
+
+    // Guardar cada usuario de Bonita en la base de datos
+    if (bonitaUsers && bonitaUsers.length > 0) {
+
+      for (const bonitaUser of bonitaUsers) {
+        try {
+          await User.findOrCreate({
+            where: { bonitaId: bonitaUser.id },
+            defaults: {
+              bonitaId: bonitaUser.id
+            }
+          });
+          console.log(`✅ Usuario guardado en base de datos: ${bonitaUser.userName || bonitaUser.username} (Bonita ID: ${bonitaUser.id})`);
+        } catch (error) {
+          console.error(`❌ Error guardando usuario ${bonitaUser.id}:`, error.message);
+        }
+      }
+      
+      console.log(`✅ ${bonitaUsers.length} usuarios procesados correctamente`);
+    } else {
+      console.log('ℹ️ No hay usuarios en el grupo de Bonita para guardar');
+    }
+
+    
+
+
     // Crear proyecto de ejemplo
-    const sampleProject = await Project.findOrCreate({
-      where: { name: 'Reforestación Urbana 2025' },
-      defaults: {
-        name: 'Reforestación Urbana 2025',
-        description: 'Proyecto para plantar 1000 árboles en zonas urbanas de Buenos Aires',
-        startDate: new Date('2025-01-01'),
-        endDate: new Date('2025-12-31'),
-        status: 'active',
-        progress: 15,
-        createdBy: ongAmbiental[0].id
-      }
-    });
+    // const proyectoReforestacionUrbana2025 = await Project.findOrCreate({
+    //   where: { name: 'Reforestación Urbana 2025' },
+    //   defaults: {
+    //     name: 'Reforestación Urbana 2025',
+    //     description: 'Proyecto para plantar 1000 árboles en zonas urbanas de Buenos Aires',
+    //     startDate: new Date('2025-01-01'),
+    //     endDate: new Date('2025-12-31'),
+    //     status: 'active',
+    //     progress: 15,
+    //     createdBy: ongPrincipal[0].id
+    //   }
+    // });
 
-    // Crear tareas de ejemplo
-    await Task.findOrCreate({
-      where: { title: 'Selección de ubicaciones' },
-      defaults: {
-        title: 'Selección de ubicaciones',
-        description: 'Mapear y seleccionar las 50 ubicaciones prioritarias para la plantación',
-        status: 'done',
-        dueDate: new Date('2025-02-15'),
-        estimatedHours: 20,
-        actualHours: 18,
-        projectId: sampleProject[0].id,
-        takenBy: colaborador[0].id,
-        createdBy: ongAmbiental[0].id,
-        taskTypeId: tipoEconomico[0].id
-      }
-    });
+    // // Crear tareas de ejemplo
+    // await Task.findOrCreate({
+    //   where: { title: 'Selección de ubicaciones' },
+    //   defaults: {
+    //     title: 'Selección de ubicaciones',
+    //     description: 'Mapear y seleccionar las 50 ubicaciones prioritarias para la plantación',
+    //     status: 'done',
+    //     dueDate: new Date('2025-02-15'),
+    //     estimatedHours: 20,
+    //     actualHours: 18,
+    //     projectId: proyectoReforestacionUrbana2025[0].id,
+    //     takenBy: ongColaboradora1[0].id,
+    //     createdBy: ongPrincipal[0].id,
+    //     taskTypeId: tipoEconomico[0].id
+    //   }
+    // });
 
-    await Task.findOrCreate({
-      where: { title: 'Compra de plantines' },
-      defaults: {
-        title: 'Compra de plantines',
-        description: 'Adquirir 1000 plantines de especies nativas apropiadas para el clima urbano',
-        status: 'todo',
-        dueDate: new Date('2025-03-01'),
-        estimatedHours: 8,
-        actualHours: 0,
-        projectId: sampleProject[0].id,
-        takenBy: null,
-        createdBy: ongAmbiental[0].id,
-        taskTypeId: tipoMateriales[0].id
-      }
-    });
+    // await Task.findOrCreate({
+    //   where: { title: 'Compra de plantines' },
+    //   defaults: {
+    //     title: 'Compra de plantines',
+    //     description: 'Adquirir 1000 plantines de especies nativas apropiadas para el clima urbano',
+    //     status: 'todo',
+    //     dueDate: new Date('2025-03-01'),
+    //     estimatedHours: 8,
+    //     actualHours: 0,
+    //     projectId: proyectoReforestacionUrbana2025[0].id,
+    //     takenBy: null,
+    //     createdBy: ongPrincipal[0].id,
+    //     taskTypeId: tipoMateriales[0].id
+    //   }
+    // });
 
     console.log('Datos de prueba creados correctamente');
   } catch (error) {
@@ -319,7 +354,6 @@ module.exports = {
     Task,
     TaskType,
     Commitment,
-    Role
   },
   syncDatabase,
   closeConnection,

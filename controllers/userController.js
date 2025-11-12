@@ -1,40 +1,11 @@
-const { models } = require('../models');
-const { User, Project } = models;
 const bonitaService = require('../services/bonitaService');
 const { validatePasswordStrength } = require('../validators/passwordValidator');
 
 const userController = {
-  
-  // GET - Listar usuarios (ONGs)
-  getUsers: async (req, res) => {
-    try {
-      const users = await User.findAll({
-        attributes: { exclude: ['password'] },
-        include: [
-          {
-            model: Project,
-            as: 'createdProjects',
-            attributes: ['id', 'name', 'status']
-          }
-        ]
-      });
-
-      res.json({
-        success: true,
-        data: users,
-        total: users.length
-      });
-    } catch (error) {
-      console.error('Error getting users:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error obteniendo usuarios'
-      });
-    }
-  },
 
   // POST - Crear usuario (ONG)
   createUser: async (req, res) => {
+    
     try {
       const {
         username,

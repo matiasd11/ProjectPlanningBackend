@@ -44,15 +44,12 @@ const Project = sequelize.define('Project', {
   },
   status: {
     type: DataTypes.ENUM(
-      'draft',
-      'planning', 
-      'active',
-      'on_hold',
-      'completed',
-      'cancelled',
-      'pending_approval'
+      'GENERADO',
+      'PLANIFICADO', 
+      'EN_EJECUCION',
+      'COMPLETADO',
     ),
-    defaultValue: 'draft',
+    defaultValue: 'GENERADO',
     allowNull: false
   },
   progress: {
@@ -70,7 +67,7 @@ const Project = sequelize.define('Project', {
     field: 'created_by',
     references: {
       model: 'users',
-      key: 'id'
+      key: 'bonita_id'
     }
   },
   // Referencia al caso en Bonita BPM

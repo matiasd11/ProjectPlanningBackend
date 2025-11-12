@@ -64,16 +64,24 @@ const config = {
 const env = process.env.NODE_ENV || 'development';
 const sequelize = new Sequelize(config[env]);
 
-// Test de conexión mejorado
-const testConnection = async () => {
-  try {
-    await sequelize.authenticate();
-    console.log('Conexión a MySQL establecida correctamente.');
-    return true;
-  } catch (error) {
-    console.error('Error conectando a MySQL:', error.message);
-    return false;
+// Test de conexión mejorado con retry
+const testConnection = async (retries = 5, delay = 3000) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      await sequelize.authenticate();
+      console.log('Conexión a MySQL establecida correctamente.');
+      return true;
+    } catch (error) {
+      console.error(`Error conectando a MySQL (intento ${i + 1}/${retries}):`, error.message);
+      if (i < retries - 1) {
+        console.log(`Reintentando en ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        return false;
+      }
+    }
   }
+  return false;
 };
 
 module.exports = { 

@@ -1,6 +1,5 @@
 const { generateToken } = require('../middleware/auth');
 const bonitaService = require('../services/bonitaService');
-const { models } = require('../models');
 
 const authController = {
   

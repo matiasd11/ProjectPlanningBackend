@@ -107,11 +107,11 @@ const startServer = async () => {
       throw new Error('No se pudo sincronizar la base de datos');
     }
 
-    // // Crear datos de prueba (solo en desarrollo)
-    // if (process.env.NODE_ENV === 'development') {
-    //   console.log('Creando datos de prueba...');
-    //   await seedData();
-    // }
+    // Crear datos de prueba
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Creando datos de prueba...');
+      await seedData();
+    }
 
     // Iniciar servidor
     app.listen(PORT, () => {

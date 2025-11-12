@@ -62,7 +62,7 @@ const Task = sequelize.define('Task', {
     field: 'taken_by',
     references: {
       model: 'users',
-      key: 'id'
+      key: 'bonita_id'
     },
     comment: 'ONG que se hace cargo voluntariamente de esta tarea'
   },
@@ -72,7 +72,7 @@ const Task = sequelize.define('Task', {
     field: 'created_by',
     references: {
       model: 'users',
-      key: 'id'
+      key: 'bonita_id'
     }
   },
   taskTypeId: {
