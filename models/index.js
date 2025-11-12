@@ -109,7 +109,7 @@ const syncDatabase = async (options = {}) => {
     }
 
     // Sincronizar modelos
-    const { force = true, alter = false } = options;
+    const { force = false, alter = false } = options;
     
     if (force) {
       console.log('⚠️  RECREANDO todas las tablas...');
