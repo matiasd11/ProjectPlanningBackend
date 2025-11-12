@@ -41,46 +41,20 @@ router.get('/coverage-request/:caseId/status', async (req, res) => {
 });
 
 // GET - Listar tareas locales (de la BD)
-router.get('/local', async (req, res) => {
+router.get('/local/:projectId', async (req, res) => {
   try {
-    const { projectId, status, page = 1, limit = 10 } = req.query;
+    const { projectId } = req.params;
     
-    const where = { isCoverageRequest: false }; // Solo tareas locales
+    const where = { isCoverageRequest: false };
     if (projectId) where.projectId = projectId;
-    if (status) where.status = status;
     
-    const offset = (page - 1) * limit;
-    
-    const { count, rows } = await Task.findAndCountAll({
+    const tasks = await Task.findAll({
       where,
-      include: [
-        {
-          model: User,
-          as: 'assignee',
-          attributes: ['id', 'username', 'organizationName'],
-          required: false
-        },
-        {
-          model: User,
-          as: 'taskCreator',
-          attributes: ['id', 'username', 'organizationName']
-        }
-      ],
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      order: [['created_at', 'DESC']]
     });
     
     res.json({
       success: true,
-      data: rows,
-      pagination: {
-        total: count,
-        page: parseInt(page),
-        pages: Math.ceil(count / limit),
-        limit: parseInt(limit)
-      },
-      filter: { onlyLocalTasks: true }
+      data: tasks,
     });
   } catch (error) {
     console.error('Error getting local tasks:', error);
