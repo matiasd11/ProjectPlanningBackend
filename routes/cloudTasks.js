@@ -72,7 +72,7 @@ router.post('/extension/tasks', async (req, res) => {
     // 👇 Enviamos el body JSON igual que espera el Groovy
     const response = await axios.post(
       url,
-      { username, password, projectId },
+      { projectId },
       {
         headers: {
           'Cookie': `${bonitaService.jsessionId}`,
@@ -131,8 +131,6 @@ router.post('/extension/commitment', async (req, res) => {
     const response = await axios.post(
       url,
       {
-        username,
-        password,
         taskId,
         ongId,
         description
@@ -193,7 +191,7 @@ router.post('/extension/commitmentsByTask', async (req, res) => {
     // 👇 Enviamos body plano JSON (idéntico al endpoint anterior)
     const response = await axios.post(
       url,
-      { username, password, taskId },
+      { taskId },
       {
         headers: {
           'Cookie': `${bonitaService.jsessionId}`,
@@ -250,7 +248,7 @@ router.post('/extension/getTasksByProject', async (req, res) => {
     // 👇 Enviamos el body JSON igual que espera el Groovy
     const response = await axios.post(
       url,
-      { username, password, projectId },
+      { projectId },
       {
         headers: {
           'Cookie': `${bonitaService.jsessionId}`,
@@ -307,8 +305,6 @@ router.post('/extension/assignCommitment', async (req, res) => {
     const response = await axios.post(
       url,
       {
-        username,
-        password,
         taskId,
         commitmentId
       },
@@ -364,8 +360,6 @@ router.post('/extension/commitmentDone', async (req, res) => {
     const response = await axios.post(
       url,
       {
-        username,
-        password,
         commitmentId
       },
       {
