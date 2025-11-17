@@ -176,6 +176,8 @@ const projectController = {
             coverageRequestsData: JSON.stringify(coverageRequestsData)
           };
 
+          // Esperar 1 segundo para evitar problemas de timing
+          await new Promise(resolve => setTimeout(resolve, 1000));
 
           // Buscar la primera tarea humana del caso
           const tasks = await bonitaService.getAllTasksForCase(caseId);

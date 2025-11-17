@@ -1335,11 +1335,22 @@ class BonitaService {
 
       for (const [key, val] of Object.entries(taskVariables)) {
         let type;
-        if (typeof val === 'number') type = 'java.lang.Integer';
-        else if (typeof val === 'boolean') type = 'java.lang.Boolean';
-        else type = 'java.lang.String';
+        let value;
 
-        const value = typeof val === 'object' ? JSON.stringify(val) : val;
+        // Handle numeric values that might be strings
+        if (typeof val === 'number' || (!isNaN(val) && !isNaN(parseFloat(val)) && val !== '')) {
+          type = 'java.lang.Integer';
+          value = parseInt(val);
+        } else if (typeof val === 'boolean') {
+          type = 'java.lang.Boolean';
+          value = val;
+        } else if (typeof val === 'object') {
+          type = 'java.lang.String';
+          value = JSON.stringify(val);
+        } else {
+          type = 'java.lang.String';
+          value = String(val);
+        }
 
         await this.updateCaseVariable(caseId, key, value, type);
       }
