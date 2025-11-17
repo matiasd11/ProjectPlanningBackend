@@ -81,7 +81,7 @@ router.get('/:id', async (req, res) => {
         {
           model: User,
           as: 'creator',
-          attributes: ['id', 'username', 'organizationName', 'email', 'role', 'website']
+          attributes: ['bonitaId']
         },
         {
           model: Task,
@@ -89,8 +89,8 @@ router.get('/:id', async (req, res) => {
           attributes: ['id', 'title', 'status'],
           include: [{
             model: User,
-            as: 'assignedUser',
-            attributes: ['id', 'username', 'organizationName']
+            as: 'volunteer',
+            attributes: ['bonitaId']
           }]
         }
       ]

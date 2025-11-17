@@ -1045,7 +1045,7 @@ class BonitaService {
 
       const response = await axios.post(
         `${this.baseURL}/API/bpm/userTask/${taskId}/execution`,
-        variables,
+        {},
         {
           headers: {
             'Cookie': this.jsessionId,

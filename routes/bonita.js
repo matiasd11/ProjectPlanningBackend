@@ -12,16 +12,14 @@ router.post('/task/:taskId/complete', async (req, res) => {
     const { variables = {} } = req.body;
     
     console.log(`Completando tarea ${taskId} con variables específicas`);
-    console.log('Variables recibidas:', JSON.stringify(variables, null, 2));
     
-    const result = await bonitaService.completeTaskWithVariables(taskId, variables);
+    const result = await bonitaService.completeTask(taskId, variables);
     
     res.json({
       success: true,
       message: 'Tarea completada exitosamente con variables específicas',
       data: {
         taskId,
-        variables,
         result
       }
     });
