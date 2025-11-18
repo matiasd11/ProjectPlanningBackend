@@ -62,7 +62,7 @@ const Project = sequelize.define('Project', {
   },
   // Foreign Key para el creador
   createdBy: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.STRING,
     allowNull: false,
     field: 'created_by',
     references: {

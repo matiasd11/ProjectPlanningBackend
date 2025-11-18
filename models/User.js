@@ -36,8 +36,7 @@ const User = sequelize.define('User', {
   //   comment: 'Nombre oficial de la ONG'
   // },
   bonitaId: {
-    type: DataTypes.INTEGER,
-    autoIncrement: false,
+    type: DataTypes.STRING,
     primaryKey: true,
     comment: 'ID de Bonita'
   },

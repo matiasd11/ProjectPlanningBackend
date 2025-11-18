@@ -58,7 +58,7 @@ const Task = sequelize.define('Task', {
     }
   },
   takenBy: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.STRING,
     field: 'taken_by',
     references: {
       model: 'users',
@@ -67,7 +67,7 @@ const Task = sequelize.define('Task', {
     comment: 'ONG que se hace cargo voluntariamente de esta tarea'
   },
   createdBy: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.STRING,
     allowNull: false,
     field: 'created_by',
     references: {

@@ -4,10 +4,111 @@ const { User, Project, Task, TaskType } = models;
 const bonitaService = require('../services/bonitaService');
 const router = express.Router();
 const projectController = require('../controllers/projectController');
+const taskController = require('../controllers/taskController');
+const axios = require('axios');
+
 
 
 // POST - Listar proyectos por ONG y/o status
 router.post('/filter', projectController.getProjects);
+
+// POST - Obtener todas las tareas (locales + cloud) de un proyecto
+router.post('/:projectId/tasks', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { username, password } = req.body;
+
+    if (!projectId || isNaN(projectId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID de proyecto inválido'
+      });
+    }
+
+    const localTasks = [];
+    const cloudTasks = [];
+    let localTasksError = null;
+    let cloudTasksError = null;
+
+    // Obtener tareas locales
+    try {
+      const where = { isCoverageRequest: false, projectId: parseInt(projectId) };
+      const tasks = await Task.findAll({ where });
+      localTasks.push(...tasks);
+    } catch (error) {
+      console.error('Error obteniendo tareas locales:', error);
+      localTasksError = error.message;
+    }
+
+    // Obtener tareas del cloud (si se proporcionan credenciales)
+    if (username && password) {
+      try {
+        // 🔐 Autenticación con Bonita
+        const loggedIn = await bonitaService.authenticate(username, password);
+        if (loggedIn) {
+          const url = `${bonitaService.baseURL}/API/extension/getTasksByProject`;
+          console.log(`📡 Llamando a Bonita Extension POST ${url}`);
+
+          const response = await axios.post(
+            url,
+            { projectId: parseInt(projectId) },
+            {
+              headers: {
+                'Cookie': `${bonitaService.jsessionId}`,
+                'X-Bonita-API-Token': bonitaService.apiToken,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+
+          // Si response.data es un array, lo agregamos directamente
+          // Si es un objeto con una propiedad data, la usamos
+          const tasks = Array.isArray(response.data)
+            ? response.data
+            : (response.data?.data || response.data?.tasks || []);
+
+          if (Array.isArray(tasks)) {
+            cloudTasks.push(...tasks);
+          }
+        } else {
+          cloudTasksError = 'No se pudo autenticar con Bonita';
+        }
+      } catch (error) {
+        console.error('Error obteniendo tareas del cloud:', error);
+        cloudTasksError = error.response?.data || error.message;
+      }
+    }
+
+    // Combinar ambas listas y ordenar por dueDate ascendente
+    const allTasks = [...localTasks, ...cloudTasks].sort((a, b) => {
+      const dateA = new Date(a.dueDate).getTime();
+      const dateB = new Date(b.dueDate).getTime();
+      return dateA - dateB;
+    });
+
+    res.json({
+      success: true,
+      data: allTasks,
+      summary: {
+        total: allTasks.length,
+        local: localTasks.length,
+        cloud: cloudTasks.length
+      },
+      errors: {
+        local: localTasksError,
+        cloud: cloudTasksError
+      }
+    });
+
+  } catch (error) {
+    console.error('Error obteniendo todas las tareas:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error interno del servidor',
+      error: error.message
+    });
+  }
+});
 
 // GET - Listar proyectos
 // router.get('/', async (req, res) => {
