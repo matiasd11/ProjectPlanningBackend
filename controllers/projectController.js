@@ -160,6 +160,7 @@ const projectController = {
               urgencyLevel: task.urgencyLevel || 'medium',
               requiredSkills: task.requiredSkills || [],
               taskTypeId: task.taskTypeId || 1,
+              createdBy: ownerId,
               projectId: project.id,
               isCoverageRequest: true,
               source: "bonita_batch_process"
