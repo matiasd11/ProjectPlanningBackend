@@ -216,62 +216,6 @@ const taskController = {
     },
 
     /**
-     * @desc Proxy a Bonita /API/extension/cloudTasks (envía username, password y projectId en body)
-     */
-    getTasksExtension: async (req, res) => {
-        try {
-            const { username, password, projectId } = req.body;
-
-            if (!username || !password || !projectId) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Faltan datos requeridos en el body',
-                });
-            }
-
-            // 🔐 Autenticación con Bonita
-            const loggedIn = await bonitaService.authenticate(username, password);
-            if (!loggedIn) {
-                return res.status(500).json({
-                    success: false,
-                    message: 'No se pudo autenticar con Bonita',
-                });
-            }
-
-            const url = `${bonitaService.baseURL}/API/extension/cloudTasks`;
-            console.log(`📡 Llamando a Bonita Extension POST ${url}`);
-
-            // 👇 Enviamos el body JSON igual que espera el Groovy
-            const response = await axios.post(
-                url,
-                { projectId },
-                {
-                    headers: {
-                        'Cookie': `${bonitaService.jsessionId}`,
-                        'X-Bonita-API-Token': bonitaService.apiToken,
-                        'Content-Type': 'application/json',
-                    },
-                }
-            );
-
-            res.json({
-                success: true,
-                data: response.data,
-            });
-        } catch (error) {
-            console.error(
-                '❌ Error llamando a extension/tasks:',
-                error.response?.data || error.message
-            );
-            res.status(500).json({
-                success: false,
-                message: 'Error llamando a extension/tasks',
-                error: error.response?.data || error.message,
-            });
-        }
-    },
-
-    /**
      * @desc Proxy a Bonita /API/extension/commitment tras autenticación
      * @body {string} username - Usuario Bonita
      * @body {string} password - Password Bonita
@@ -316,7 +260,7 @@ const taskController = {
 
             res.json({
                 success: true,
-                data: response.data,
+                data: response.data.data || [],
             });
         } catch (error) {
             console.error('Error llamando a extension/commitment:', error.response?.data || error.message);
@@ -357,7 +301,6 @@ const taskController = {
             const url = `${bonitaService.baseURL}/API/extension/commitmentsByTask`;
             console.log(`📡 Llamando a Bonita Extension POST ${url}`);
 
-            // 👇 Enviamos body plano JSON (idéntico al endpoint anterior)
             const response = await axios.post(
                 url,
                 { taskId },
@@ -370,9 +313,36 @@ const taskController = {
                 }
             );
 
+            const commitments = response.data.data || [];
+
+            // Obtener usuarios de Bonita para enriquecer los commitments
+            let bonitaUsers = [];
+            try {
+                bonitaUsers = await bonitaService.getBonitaUsers();
+                console.log(`✅ Obtenidos ${bonitaUsers.length} usuarios de Bonita para enriquecer commitments`);
+            } catch (error) {
+                console.error('⚠️ Error obteniendo usuarios de Bonita:', error.message);
+            }
+
+            // Crear un mapa de usuarios por ID para búsqueda rápida
+            const usersById = {};
+            bonitaUsers.forEach(user => {
+                usersById[user.id] = user;
+            });
+
+            // Enriquecer cada commitment con los datos del usuario correspondiente al ongId
+            const enrichedCommitments = commitments.map(commitment => {
+                if (commitment.ongId && usersById[commitment.ongId]) {
+                    commitment.ongUser = usersById[commitment.ongId];
+                } else {
+                    commitment.ongUser = null;
+                }
+                return commitment;
+            });
+
             res.json({
                 success: true,
-                data: response.data,
+                data: enrichedCommitments,
             });
         } catch (error) {
             console.error(
@@ -493,7 +463,63 @@ const taskController = {
                 error: error.response?.data || error.message,
             });
         }
-    }
+    },
+
+    /**
+     * @desc Proxy a Bonita /API/extension/cloudTasks (envía username, password y projectId en body)
+     */
+    getTasksExtension: async (req, res) => {
+        try {
+            const { username, password, projectId } = req.body;
+
+            if (!username || !password || !projectId) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Faltan datos requeridos en el body',
+                });
+            }
+
+            // 🔐 Autenticación con Bonita
+            const loggedIn = await bonitaService.authenticate(username, password);
+            if (!loggedIn) {
+                return res.status(500).json({
+                    success: false,
+                    message: 'No se pudo autenticar con Bonita',
+                });
+            }
+
+            const url = `${bonitaService.baseURL}/API/extension/cloudTasks`;
+            console.log(`📡 Llamando a Bonita Extension POST ${url}`);
+
+            // 👇 Enviamos el body JSON igual que espera el Groovy
+            const response = await axios.post(
+                url,
+                { projectId },
+                {
+                    headers: {
+                        'Cookie': `${bonitaService.jsessionId}`,
+                        'X-Bonita-API-Token': bonitaService.apiToken,
+                        'Content-Type': 'application/json',
+                    },
+                }
+            );
+
+            res.json({
+                success: true,
+                data: response.data,
+            });
+        } catch (error) {
+            console.error(
+                '❌ Error llamando a extension/tasks:',
+                error.response?.data || error.message
+            );
+            res.status(500).json({
+                success: false,
+                message: 'Error llamando a extension/tasks',
+                error: error.response?.data || error.message,
+            });
+        }
+    },
 
 };
 

@@ -1236,7 +1236,7 @@ class BonitaService {
         },
         params: {
           p: 0,
-          c: 10
+          c: 100
         }
       });
 

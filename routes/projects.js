@@ -8,9 +8,9 @@ const taskController = require('../controllers/taskController');
 const axios = require('axios');
 
 
-
 // POST - Listar proyectos por ONG y/o status
 router.post('/filter', projectController.getProjects);
+
 
 // POST - Obtener todas las tareas (locales + cloud) de un proyecto
 router.post('/:projectId/tasks', async (req, res) => {
@@ -79,8 +79,39 @@ router.post('/:projectId/tasks', async (req, res) => {
       }
     }
 
-    // Combinar ambas listas y ordenar por dueDate ascendente
-    const allTasks = [...localTasks, ...cloudTasks].sort((a, b) => {
+    // Combinar ambas listas
+    const allTasks = [...localTasks, ...cloudTasks];
+
+    // Obtener usuarios de Bonita para enriquecer las tareas
+    let bonitaUsers = [];
+    try {
+      bonitaUsers = await bonitaService.getBonitaUsers();
+      console.log(`✅ Obtenidos ${bonitaUsers.length} usuarios de Bonita`);
+    } catch (error) {
+      console.error('⚠️ Error obteniendo usuarios de Bonita:', error.message);
+    }
+
+    // Crear un mapa de usuarios por ID para búsqueda rápida
+    const usersById = {};
+    bonitaUsers.forEach(user => {
+      usersById[user.id] = user;
+    });
+
+    // Enriquecer cada tarea con los datos del usuario asignado
+    const enrichedTasks = allTasks.map(task => {
+      const taskData = task.toJSON ? task.toJSON() : task;
+      
+      if (taskData.takenBy && usersById[taskData.takenBy]) {
+        taskData.takenByUser = usersById[taskData.takenBy];
+      } else {
+        taskData.takenByUser = null;
+      }
+      
+      return taskData;
+    });
+
+    // Ordenar por dueDate ascendente
+    enrichedTasks.sort((a, b) => {
       const dateA = new Date(a.dueDate).getTime();
       const dateB = new Date(b.dueDate).getTime();
       return dateA - dateB;
@@ -88,9 +119,9 @@ router.post('/:projectId/tasks', async (req, res) => {
 
     res.json({
       success: true,
-      data: allTasks,
+      data: enrichedTasks,
       summary: {
-        total: allTasks.length,
+        total: enrichedTasks.length,
         local: localTasks.length,
         cloud: cloudTasks.length
       },
@@ -109,6 +140,7 @@ router.post('/:projectId/tasks', async (req, res) => {
     });
   }
 });
+
 
 // GET - Listar proyectos
 // router.get('/', async (req, res) => {
@@ -171,6 +203,7 @@ router.post('/:projectId/tasks', async (req, res) => {
 //     });
 //   }
 // });
+
 
 // GET - Obtener proyecto por ID con detalles de Bonita
 router.get('/:id', async (req, res) => {
@@ -250,8 +283,10 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+
 // POST - Crear proyecto y manejar tareas según isCoverageRequest
 router.post('/', projectController.createProject);
+
 
 // POST - Add a commitment to a project (find caseId from project)
 router.post('/:projectId/commitments', async (req, res) => {
@@ -319,6 +354,7 @@ router.post('/:projectId/commitments', async (req, res) => {
     });
   }
 });
+
 
 // GET - Estado del proceso en Bonita para un proyecto
 router.get('/:id/bonita-status', async (req, res) => {

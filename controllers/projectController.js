@@ -123,13 +123,13 @@ const projectController = {
           const task = await Task.create({
             title,
             description: taskDescription,
-            status: 'todo',
+            status: 'on-hold',
             dueDate: dueDate ? new Date(dueDate) : null,
             estimatedHours: estimatedHours || 0,
             actualHours: 0,
             priority,
             projectId: project.id,
-            takenBy: null,
+            takenBy: ownerId,
             createdBy: ownerId,
             taskTypeId: taskTypeId || 1,
             isCoverageRequest: false

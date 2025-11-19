@@ -22,7 +22,7 @@ const Task = sequelize.define('Task', {
     }
   },
   status: {
-    type: DataTypes.ENUM('todo', 'in_progress', 'review', 'done', 'cancelled'),
+    type: DataTypes.ENUM('todo', 'in_progress', 'done'),
     defaultValue: 'todo',
     allowNull: false
   },
@@ -111,9 +111,7 @@ Task.prototype.getProgress = function() {
   const statusProgress = {
     todo: 0,
     in_progress: 25,
-    review: 75,
     done: 100,
-    cancelled: 0
   };
   return statusProgress[this.status] || 0;
 };

@@ -345,7 +345,6 @@ const seedData = async () => {
   }
 };
 
-// Exportar todo
 module.exports = {
   sequelize,
   models: {

@@ -141,7 +141,7 @@ docker exec project-planning-backend ps aux
 # Reconstruir después de cambiar package.json
 npm run docker:build
 
-# Reiniciar todo desde cero
+# Reiniciar desde cero
 npm run docker:down
 npm run docker:up
 ```
