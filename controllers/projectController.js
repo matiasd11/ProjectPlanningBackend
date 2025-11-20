@@ -123,7 +123,7 @@ const projectController = {
           const task = await Task.create({
             title,
             description: taskDescription,
-            status: 'on-hold',
+            status: 'todo',
             dueDate: dueDate ? new Date(dueDate) : null,
             estimatedHours: estimatedHours || 0,
             actualHours: 0,
