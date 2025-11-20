@@ -1,5 +1,6 @@
 const { models } = require('../models');
-const { User, Task } = models;
+const { User, Task, Project } = models;
+const { sequelize } = require('../config/database');
 const bonitaService = require('../services/bonitaService');
 const axios = require('axios');
 
@@ -184,7 +185,6 @@ const taskController = {
             const url = `${bonitaService.baseURL}/API/extension/getTasksByProject`;
             console.log(`📡 Llamando a Bonita Extension POST ${url}`);
 
-            // 👇 Enviamos el body JSON igual que espera el Groovy
             const response = await axios.post(
                 url,
                 { projectId },
@@ -197,10 +197,36 @@ const taskController = {
                 }
             );
 
+            const tasks = response.data.data || [];
+
+            // Obtener usuarios de Bonita para enriquecer las tareas
+            let bonitaUsers = [];
+            try {
+                bonitaUsers = await bonitaService.getBonitaUsers();
+                console.log(`✅ Obtenidos ${bonitaUsers.length} usuarios de Bonita`);
+            } catch (error) {
+                console.error('⚠️ Error obteniendo usuarios de Bonita:', error.message);
+            }
+
+            // Crear un mapa de usuarios por ID para búsqueda rápida
+            const usersById = {};
+            bonitaUsers.forEach(user => {
+                usersById[user.id] = user;
+            });
+
+            // Enriquecer cada tarea con los datos del usuario asignado
+            const enrichedTasks = tasks.map(task => {
+                if (task.takenBy && usersById[task.takenBy]) {
+                    task.takenByUser = usersById[task.takenBy];
+                } else {
+                    task.takenByUser = null;
+                }
+                return task;
+            });
 
             res.json({
                 success: true,
-                data: response.data.data || [],
+                data: enrichedTasks,
             });
         } catch (error) {
             console.error(
@@ -210,6 +236,88 @@ const taskController = {
             res.status(500).json({
                 success: false,
                 message: 'Error llamando a extension/getTasksByProject',
+                error: error.response?.data || error.message,
+            });
+        }
+    },
+
+    /**
+     * @desc Proxy a Bonita /API/extension/getUnassignedTasksByProject (envía username, password y projectId en body)
+     */
+    getUnassignedTasksByProject: async (req, res) => {
+        try {
+            const { username, password, projectId } = req.body;
+
+            if (!username || !password || !projectId) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Faltan datos requeridos en el body',
+                });
+            }
+
+            // 🔐 Autenticación con Bonita
+            const loggedIn = await bonitaService.authenticate(username, password);
+            if (!loggedIn) {
+                return res.status(500).json({
+                    success: false,
+                    message: 'No se pudo autenticar con Bonita',
+                });
+            }
+
+            const url = `${bonitaService.baseURL}/API/extension/getUnassignedTasksByProject`;
+            console.log(`📡 Llamando a Bonita Extension POST ${url}`);
+
+            const response = await axios.post(
+                url,
+                { projectId },
+                {
+                    headers: {
+                        'Cookie': `${bonitaService.jsessionId}`,
+                        'X-Bonita-API-Token': bonitaService.apiToken,
+                        'Content-Type': 'application/json',
+                    },
+                }
+            );
+
+            const tasks = response.data.data || [];
+
+            // Obtener usuarios de Bonita para enriquecer las tareas
+            let bonitaUsers = [];
+            try {
+                bonitaUsers = await bonitaService.getBonitaUsers();
+                console.log(`✅ Obtenidos ${bonitaUsers.length} usuarios de Bonita`);
+            } catch (error) {
+                console.error('⚠️ Error obteniendo usuarios de Bonita:', error.message);
+            }
+
+            // Crear un mapa de usuarios por ID para búsqueda rápida
+            const usersById = {};
+            bonitaUsers.forEach(user => {
+                usersById[user.id] = user;
+            });
+
+            // Enriquecer cada tarea con los datos del usuario asignado
+            const enrichedTasks = tasks.map(task => {
+                if (task.takenBy && usersById[task.takenBy]) {
+                    task.takenByUser = usersById[task.takenBy];
+                } else {
+                    task.takenByUser = null;
+                }
+                return task;
+            });
+
+            res.json({
+                success: true,
+                data: enrichedTasks,
+            });
+        } catch (error) {
+            console.error(
+                '❌ Error llamando a extension/getUnassignedTasksByProject:',
+                error.response?.data || error.message
+            );
+            res.status(500).json({
+                success: false,
+                message: 'Error llamando a extension/getUnassignedTasksByProject',
                 error: error.response?.data || error.message,
             });
         }
@@ -361,20 +469,26 @@ const taskController = {
      * @desc Proxy a Bonita /API/extension/assignCommitment tras autenticación
      * @body {string} username - Usuario Bonita
      * @body {string} password - Password Bonita
+     * @body {number} projectId - ID del proyecto
      * @body {number} taskId - ID de la tarea
      * @body {number} commitmentId - ID del compromiso
      */
     assignCommitment: async (req, res) => {
-        try {
-            const { username, password, taskId, commitmentId } = req.body;
+        // Crear la transacción al inicio
+        const transaction = await sequelize.transaction();
 
-            if (!username || !password || !taskId || !commitmentId) {
+        try {
+            const { username, password, projectId, taskId, commitmentId } = req.body;
+
+            if (!username || !password || !projectId || !taskId || !commitmentId) {
+                await transaction.rollback();
                 return res.status(400).json({ success: false, message: 'Faltan datos requeridos en el body' });
             }
 
             // 🔐 Autenticación Bonita
             const loggedIn = await bonitaService.authenticate(username, password);
             if (!loggedIn) {
+                await transaction.rollback();
                 return res.status(500).json({ success: false, message: 'No se pudo autenticar con Bonita' });
             }
 
@@ -382,7 +496,6 @@ const taskController = {
 
             console.log(`Llamando a Bonita Extension POST ${url}`);
 
-            // 👇 Enviamos el body en formato JSON (ahora el Groovy lo interpreta bien)
             const response = await axios.post(
                 url,
                 {
@@ -398,11 +511,53 @@ const taskController = {
                 }
             );
 
+            // Consultar si existen tareas no asignadas para el proyecto
+            const urlUnassignedTasks = `${bonitaService.baseURL}/API/extension/getUnassignedTasksByProject`;
+            console.log(`📡 Llamando a Bonita Extension POST ${urlUnassignedTasks}`);
+
+            const responseUnassignedTasks = await axios.post(
+                urlUnassignedTasks,
+                { projectId },
+                {
+                    headers: {
+                        'Cookie': `${bonitaService.jsessionId}`,
+                        'X-Bonita-API-Token': bonitaService.apiToken,
+                        'Content-Type': 'application/json',
+                    },
+                }
+            );
+
+            const tasksUnassigned = responseUnassignedTasks.data.data || [];
+
+            // Si están todas las tareas asignadas, actualizar el estado del proyecto a PLANIFICADO y completar tarea de Bonita
+            if (tasksUnassigned.length === 0) {
+                const project = await Project.findByPk(projectId, { transaction });
+
+                if (project && project.status !== 'PLANIFICADO') {
+                    project.status = 'PLANIFICADO';
+                    await project.save({ transaction });
+                    console.log(`✅ Proyecto ${projectId} actualizado a estado PLANIFICADO - Todas las tareas están asignadas`);
+
+                    // Consultar las tareas del caso en Bonita
+                    console.log(`Obteniendo tareas del caso: ${project.bonitaCaseId}`);
+                    const tasks = await bonitaService.getAllTasksForCase(project.bonitaCaseId);
+                    console.log(`Tareas: ${JSON.stringify(tasks)}`);
+
+                    // Completar la tarea del caso
+                    await bonitaService.autoCompleteTask(tasks[0].id, {});
+
+                }
+            }
+
+            await transaction.commit();
+
             res.json({
                 success: true,
                 data: response.data,
             });
         } catch (error) {
+            await transaction.rollback();
+
             console.error('Error llamando a extension/assignCommitment:', error.response?.data || error.message);
             res.status(500).json({
                 success: false,

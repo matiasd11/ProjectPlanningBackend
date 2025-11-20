@@ -9,6 +9,12 @@ const taskController = require('../controllers/taskController');
 router.post('/extension/getCloudTasksByProject', taskController.getCloudTasksByProject);
 
 /**
+ * @route POST /api/v1/cloud-tasks/extension/getUnassignedTasksByProject
+ * @desc Proxy a Bonita /API/extension/getUnassignedTasksByProject (envía username, password y projectId en body)
+ */
+router.post('/extension/getUnassignedTasksByProject', taskController.getUnassignedTasksByProject);
+
+/**
  * @route POST /api/v1/cloud-tasks/extension/tasks
  * @desc Proxy a Bonita /API/extension/cloudTasks (envía username, password y projectId en body)
  */
