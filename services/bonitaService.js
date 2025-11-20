@@ -131,22 +131,22 @@ class BonitaService {
       if (!existingUser) {
         console.log(`📦 Creando nuevo usuario "${user.username}" en Bonita...`);
         const userRes = await axios.post(
-          `${this.baseURL}/API/identity/user`, 
-            {
-              userName: user.username,
-              password: user.password,
-              firstname: user.organizationName,
-              lastname: user.organizationName,
-              enabled: 'true'
-            },
-            { headers }
-          );
-          userId = userRes.data.id;
-          console.log(`✅ Usuario creado con ID ${userId}`);
+          `${this.baseURL}/API/identity/user`,
+          {
+            userName: user.username,
+            password: user.password,
+            firstname: user.organizationName,
+            lastname: user.organizationName,
+            enabled: 'true'
+          },
+          { headers }
+        );
+        userId = userRes.data.id;
+        console.log(`✅ Usuario creado con ID ${userId}`);
       } else {
         userId = existingUser.id;
         console.log(existingUser);
-        
+
         console.log(`ℹ️ El usuario "${user.username}" ya existe en Bonita, se omite la creación...`);
       }
 
@@ -215,7 +215,7 @@ class BonitaService {
       console.log('Usuario obtenido en Bonita', bonitaUser);
       await transaction.commit();
       return bonitaUser;
-        
+
     } catch (error) {
       console.error('Error creando usuario en Bonita:', error.message);
       await transaction.rollback();
@@ -302,7 +302,7 @@ class BonitaService {
             }
           })
         );
-        
+
         // Filtrar roles nulos
         assignedRoles.push(...rolesData.filter(role => role !== null));
       }
@@ -532,10 +532,10 @@ class BonitaService {
         }
       );
 
-      const roles = response.data.filter(role => 
+      const roles = response.data.filter(role =>
         role.name !== 'Member' && role.name !== 'member'
       );
-      
+
       console.log('✅ Roles obtenidos:', roles);
       return roles;
 
@@ -1043,9 +1043,15 @@ class BonitaService {
         await this.authenticate();
       }
 
+      // Si hay variables, primero las actualizamos en el caso
+      if (Object.keys(variables).length > 0) {
+        console.log('Actualizando variables antes de completar tarea:', variables);
+        // Aquí podrías actualizar variables si fuera necesario
+      }
+
       const response = await axios.post(
         `${this.baseURL}/API/bpm/userTask/${taskId}/execution`,
-        {},
+        variables,
         {
           headers: {
             'Cookie': this.jsessionId,
@@ -1059,6 +1065,71 @@ class BonitaService {
       return response.data;
     } catch (error) {
       console.error('Error completando tarea:', error.message);
+      console.error('Detalles del error:', error.response?.data);
+      throw error;
+    }
+  }
+
+  // Auto-completar una tarea (asigna automáticamente y luego completa)
+  async autoCompleteTask(taskId, variables = {}) {
+    try {
+      if (!this.apiToken) {
+        await this.authenticate();
+      }
+
+      console.log(`🚀 Iniciando auto-complete para tarea ${taskId}`);
+
+      // 1️⃣ Obtener usuarios disponibles
+      const users = await this.getBonitaUsers();
+      const walterUser = users.find(u => u.userName === 'walter.bates');
+      const userToAssign = walterUser || users[0];
+
+      if (!userToAssign) {
+        throw new Error('No hay usuarios disponibles para asignar la tarea');
+      }
+
+      console.log(`👤 Asignando tarea ${taskId} a ${userToAssign.userName} (ID: ${userToAssign.id})`);
+
+      // 2️⃣ Asignar la tarea al usuario
+      await axios.put(
+        `${this.baseURL}/API/bpm/userTask/${taskId}`,
+        { assigned_id: userToAssign.id },
+        {
+          headers: {
+            'Cookie': this.jsessionId,
+            'X-Bonita-API-Token': this.apiToken,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log(`✅ Tarea ${taskId} asignada correctamente`);
+
+      // 3️⃣ Completar la tarea inmediatamente
+      console.log(`🎯 Completando tarea ${taskId} automáticamente...`);
+
+      const response = await axios.post(
+        `${this.baseURL}/API/bpm/userTask/${taskId}/execution`,
+        variables,
+        {
+          headers: {
+            'Cookie': this.jsessionId,
+            'X-Bonita-API-Token': this.apiToken,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log('🎉 Tarea auto-completada exitosamente');
+      return {
+        success: true,
+        message: `Tarea ${taskId} auto-completada correctamente`,
+        assignedTo: userToAssign.userName,
+        data: response.data
+      };
+
+    } catch (error) {
+      console.error('❌ Error en auto-complete:', error.response?.data || error.message);
       throw error;
     }
   }

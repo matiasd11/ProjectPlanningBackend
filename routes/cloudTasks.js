@@ -53,4 +53,29 @@ router.post('/extension/assignCommitment', taskController.assignCommitment);
  */
 router.post('/extension/commitmentDone', taskController.markCommitmentDone);
 
+/**
+ * @route POST /api/v1/cloud-tasks/extension/taskObservation
+ * @desc Proxy a Bonita /API/extension/taskObservation tras autenticación
+ * @body {string} username - Usuario Bonita
+ * @body {string} password - Password Bonita
+ * @body {number} taskId - ID de la tarea
+ * @body {string} observation - Descripción de la observación
+ */
+router.post('/extension/taskObservation', taskController.createTaskObservation);
+
+/**
+ * @route POST /api/v1/cloud-tasks/extension/getTaskObservations
+ * @desc Proxy a Bonita /API/extension/getTaskObservations tras autenticación
+ */
+router.post('/extension/getTaskObservations', taskController.getTaskObservations);
+
+/**
+ * @route POST /api/v1/cloud-tasks/extension/taskObservationResolved
+ * @desc Proxy a Bonita /API/extension/taskObservationResolved tras autenticación
+ * @body {string} username - Usuario Bonita
+ * @body {string} password - Password Bonita
+ * @body {number} observationId - ID de la observación
+ */
+router.post('/extension/taskObservationResolved', taskController.markTaskObservationResolved);
+
 module.exports = router;

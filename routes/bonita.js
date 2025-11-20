@@ -10,11 +10,11 @@ router.post('/task/:taskId/complete', async (req, res) => {
   try {
     const { taskId } = req.params;
     const { variables = {} } = req.body;
-    
+
     console.log(`Completando tarea ${taskId} con variables específicas`);
-    
+
     const result = await bonitaService.completeTask(taskId, variables);
-    
+
     res.json({
       success: true,
       message: 'Tarea completada exitosamente con variables específicas',
@@ -33,11 +33,36 @@ router.post('/task/:taskId/complete', async (req, res) => {
   }
 });
 
+// POST - Auto-completar una tarea (asigna automáticamente y luego completa)
+router.post('/task/:taskId/auto-complete', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { variables = {} } = req.body;
+
+    console.log(`🚀 Iniciando auto-complete para tarea ${taskId}`);
+
+    const result = await bonitaService.autoCompleteTask(taskId, variables);
+
+    res.json({
+      success: true,
+      message: `Tarea ${taskId} auto-completada exitosamente`,
+      data: result
+    });
+  } catch (error) {
+    console.error('❌ Error en auto-complete:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error en auto-complete de tarea',
+      error: error.message
+    });
+  }
+});
+
 // GET - Obtener información de un caso específico
 router.get('/case/:caseId', async (req, res) => {
   try {
     const { caseId } = req.params;
-    
+
     console.log(`Obteniendo información del caso: ${caseId}`);
 
     // Obtener información del caso
@@ -92,7 +117,7 @@ router.get('/case/:caseId', async (req, res) => {
 router.get('/tasks', async (req, res) => {
   try {
     const tasks = await bonitaService.getAllPendingTasks();
-    
+
     res.json({
       success: true,
       data: tasks,
@@ -112,9 +137,9 @@ router.get('/case/:caseId/tasks', async (req, res) => {
   try {
     const { caseId } = req.params;
     console.log(`Obteniendo tareas del caso: ${caseId}`);
-    
+
     const tasks = await bonitaService.getAllTasksForCase(caseId);
-    
+
     res.json({
       success: true,
       data: tasks,
@@ -134,7 +159,7 @@ router.get('/case/:caseId/tasks', async (req, res) => {
 router.get('/case/:caseId/variables', async (req, res) => {
   try {
     const { caseId } = req.params;
-    console.log(`Obteniendo variables del caso: ${caseId}`);    res.json({
+    console.log(`Obteniendo variables del caso: ${caseId}`); res.json({
       success: true,
       data: caseInfo
     });
@@ -152,11 +177,11 @@ router.get('/case/:caseId/variables', async (req, res) => {
 router.get('/case/:caseId/tasks', async (req, res) => {
   try {
     const { caseId } = req.params;
-    
+
     console.log(`Obteniendo tareas del caso: ${caseId}`);
-    
+
     const tasks = await bonitaService.getAllTasksForCase(caseId);
-    
+
     res.json({
       success: true,
       caseId,
@@ -185,11 +210,11 @@ router.get('/case/:caseId/tasks', async (req, res) => {
 router.get('/case/:caseId/variables', async (req, res) => {
   try {
     const { caseId } = req.params;
-    
+
     console.log(`Obteniendo variables del caso: ${caseId}`);
-    
+
     const variables = await bonitaService.getCaseVariables(caseId);
-    
+
     res.json({
       success: true,
       caseId,
@@ -218,23 +243,23 @@ router.get('/case/:caseId/variables', async (req, res) => {
 router.post('/auto-complete/:caseId', async (req, res) => {
   try {
     const { caseId } = req.params;
-    
+
     console.log('🔨 Testing auto-completion for case:', caseId);
-    
+
     // Get tasks for this case
     const tasks = await bonitaService.getAllTasksForCase(caseId);
     console.log('📋 Tasks found:', tasks.map(t => ({ name: t.name, id: t.id, state: t.state })));
-    
+
     if (tasks.length > 0) {
       const taskToComplete = tasks.find(t => t.state === 'ready') || tasks[0];
       console.log(`⚡ Attempting to complete: ${taskToComplete.name} (ID: ${taskToComplete.id})`);
-      
+
       const result = await bonitaService.completeTaskById(taskToComplete.id);
-      
+
       // Check final state
       await new Promise(resolve => setTimeout(resolve, 1000));
       const finalTasks = await bonitaService.getAllTasksForCase(caseId);
-      
+
       res.json({
         success: true,
         message: 'Auto-completion test completed',
@@ -252,7 +277,7 @@ router.post('/auto-complete/:caseId', async (req, res) => {
         data: { caseId, tasks: [] }
       });
     }
-    
+
   } catch (error) {
     console.error('Error in auto-completion test:', error);
     res.status(500).json({
@@ -267,7 +292,7 @@ router.post('/auto-complete/:caseId', async (req, res) => {
 router.get('/tasks/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    
+
     const user = await User.findByPk(userId);
     if (!user) {
       return res.status(404).json({
@@ -277,13 +302,13 @@ router.get('/tasks/:userId', async (req, res) => {
     }
 
     const tasks = await bonitaService.getPendingTasks(userId);
-    
+
     res.json({
       success: true,
       data: tasks,
       message: `Tareas pendientes para ${user.organizationName}`
     });
-    
+
   } catch (error) {
     console.error('Error obteniendo tareas de Bonita:', error);
     res.status(500).json({
@@ -298,15 +323,15 @@ router.post('/tasks/:taskId/complete', async (req, res) => {
   try {
     const { taskId } = req.params;
     const { variables = {} } = req.body;
-    
+
     const result = await bonitaService.completeTask(taskId, variables);
-    
+
     res.json({
       success: true,
       message: 'Tarea completada en Bonita',
       data: result
     });
-    
+
   } catch (error) {
     console.error('Error completando tarea en Bonita:', error);
     res.status(500).json({
@@ -323,7 +348,7 @@ router.post('/test-connection', async (req, res) => {
     // Probar autenticación
     const authenticated = await bonitaService.authenticate();
     if (!authenticated) {
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false,
         error: 'No se pudo autenticar con Bonita'
       });
@@ -332,7 +357,7 @@ router.post('/test-connection', async (req, res) => {
     // Probar obtener proceso
     const process = await bonitaService.getProcessDefinition();
     if (!process) {
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false,
         error: 'Proceso no encontrado en Bonita'
       });
@@ -350,9 +375,9 @@ router.post('/test-connection', async (req, res) => {
     });
   } catch (error) {
     console.error('Error testing Bonita connection:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -361,7 +386,7 @@ router.post('/test-connection', async (req, res) => {
 router.get('/cases', async (req, res) => {
   try {
     const cases = await bonitaService.getAllCases();
-    
+
     res.json({
       success: true,
       data: cases,
@@ -370,9 +395,9 @@ router.get('/cases', async (req, res) => {
     });
   } catch (error) {
     console.error('Error obteniendo casos de Bonita:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -382,7 +407,7 @@ router.get('/cases/:caseId', async (req, res) => {
   try {
     const { caseId } = req.params;
     const caseData = await bonitaService.getCaseById(caseId);
-    
+
     res.json({
       success: true,
       data: caseData,
@@ -390,9 +415,9 @@ router.get('/cases/:caseId', async (req, res) => {
     });
   } catch (error) {
     console.error('Error obteniendo caso de Bonita:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -402,13 +427,13 @@ router.get('/status', async (req, res) => {
   try {
     // Obtener casos
     const cases = await bonitaService.getAllCases();
-    
+
     // Obtener todas las tareas pendientes (sin filtrar por usuario)
     const allTasks = await bonitaService.getAllPendingTasks();
-    
+
     // Obtener información del proceso
     const process = await bonitaService.getProcessDefinition();
-    
+
     res.json({
       success: true,
       data: {
@@ -437,9 +462,9 @@ router.get('/status', async (req, res) => {
     });
   } catch (error) {
     console.error('Error obteniendo status completo:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -449,7 +474,7 @@ router.get('/cases/:caseId/variables', async (req, res) => {
   try {
     const { caseId } = req.params;
     const variables = await bonitaService.getCaseVariables(caseId);
-    
+
     res.json({
       success: true,
       data: variables,
@@ -458,9 +483,9 @@ router.get('/cases/:caseId/variables', async (req, res) => {
     });
   } catch (error) {
     console.error('Error obteniendo variables del caso:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -470,7 +495,7 @@ router.get('/cases/:caseId/context', async (req, res) => {
   try {
     const { caseId } = req.params;
     const context = await bonitaService.getCaseContext(caseId);
-    
+
     res.json({
       success: true,
       data: context,
@@ -479,9 +504,9 @@ router.get('/cases/:caseId/context', async (req, res) => {
     });
   } catch (error) {
     console.error('Error obteniendo contexto del caso:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: error.message 
+      error: error.message
     });
   }
 });
