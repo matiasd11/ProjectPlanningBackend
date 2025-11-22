@@ -2,6 +2,7 @@ const bonitaService = require('../services/bonitaService');
 const { models } = require('../models');
 const { Project, Task } = models;
 const { sequelize } = require('../config/database');
+const axios = require('axios');
 
 const projectController = {
 
@@ -271,6 +272,150 @@ const projectController = {
       res.status(500).json({
         success: false,
         message: 'Error creando proyecto y procesando tareas',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Error interno'
+      });
+    }
+  },
+
+  executeProject: async (req, res) => {
+    const transaction = await sequelize.transaction();
+
+    try {
+      const { projectId } = req.params;
+
+      // Validar que el proyecto existe
+      const project = await Project.findByPk(projectId, { transaction });
+
+      if (!project) {
+        await transaction.rollback();
+        return res.status(404).json({
+          success: false,
+          message: 'Proyecto no encontrado'
+        });
+      }
+
+      // Validar que el proyecto está en estado PLANIFICADO
+      if (project.status !== 'PLANIFICADO') {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: `El proyecto debe estar en estado PLANIFICADO para ser ejecutado. Estado actual: ${project.status}`
+        });
+      }
+
+      // Validar que el proyecto tiene un caso de Bonita asociado
+      if (!project.bonitaCaseId) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'El proyecto no tiene un caso de Bonita asociado'
+        });
+      }
+
+      console.log(`🚀 Ejecutando proyecto ${projectId} - Cambiando estado a EN_EJECUCION`);
+
+      // Cambiar estado del proyecto a EN_EJECUCION
+      project.status = 'EN_EJECUCION';
+      await project.save({ transaction });
+
+      console.log(`✅ Proyecto ${projectId} actualizado a estado EN_EJECUCION`);
+
+      // Recuperar y cambiar estado de las tareas del cloud a in_progress
+      const url = `${bonitaService.baseURL}/API/extension/getTasksByProject`;
+      console.log(`📡 Llamando a Bonita Extension POST ${url}`);
+
+      const response = await axios.post(
+        url,
+        { projectId },
+        {
+          headers: {
+            'Cookie': `${bonitaService.jsessionId}`,
+            'X-Bonita-API-Token': bonitaService.apiToken,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const projectTasks = response.data.data || [];
+
+      // Actualizar cada tarea del proyecto a 'in_progress'
+      console.log(`🔄 Actualizando ${projectTasks.length} tareas a estado 'in_progress'`);
+      for (const task of projectTasks) {
+        try {
+          const updateUrl = `${bonitaService.baseURL}/API/extension/updateTaskStatus`;
+          console.log(`📝 Actualizando tarea ${task.id} a 'in_progress'`);
+          
+          await axios.post(
+            updateUrl,
+            { 
+              taskId: task.id, 
+              status: 'in_progress' 
+            },
+            {
+              headers: {
+                'Cookie': `${bonitaService.jsessionId}`,
+                'X-Bonita-API-Token': bonitaService.apiToken,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+          
+          console.log(`✅ Tarea ${task.id} actualizada exitosamente`);
+        } catch (taskError) {
+          console.error(`❌ Error al actualizar tarea ${task.id}:`, taskError.message);
+          // Continuar con las demás tareas aunque falle una
+        }
+      }
+
+      // Obtener las tareas del caso en Bonita
+      console.log(`🔍 Obteniendo tareas del caso de Bonita: ${project.bonitaCaseId}`);
+      const tasks = await bonitaService.getAllTasksForCase(project.bonitaCaseId);
+      console.log(`📋 Tareas encontradas:`, tasks.map(t => ({ id: t.id, name: t.name, state: t.state })));
+
+      if (!tasks || tasks.length === 0) {
+        await transaction.rollback();
+        return res.status(404).json({
+          success: false,
+          message: 'No se encontraron tareas en el caso de Bonita'
+        });
+      }
+
+      // Buscar la primera tarea humana pendiente (state === 'ready')
+      const humanTask = tasks.find(t => t.state === 'ready') || tasks[0];
+      console.log(`⚡ Completando tarea de Bonita: ${humanTask.name} (ID: ${humanTask.id})`);
+
+      // Completar la tarea automáticamente
+      await bonitaService.autoCompleteTask(humanTask.id, {});
+
+      console.log(`✅ Tarea de Bonita completada exitosamente`);
+
+      await transaction.commit();
+
+      res.json({
+        success: true,
+        message: 'Proyecto ejecutado exitosamente',
+        data: {
+          project: {
+            id: project.id,
+            name: project.name,
+            status: project.status,
+            bonitaCaseId: project.bonitaCaseId
+          },
+          bonitaTask: {
+            id: humanTask.id,
+            name: humanTask.name,
+            completed: true
+          }
+        }
+      });
+
+    } catch (error) {
+      await transaction.rollback();
+      console.error('❌ Error ejecutando proyecto:', error);
+
+      res.status(500).json({
+        success: false,
+        message: 'Error ejecutando proyecto',
         error: process.env.NODE_ENV === 'development' ? error.message : 'Error interno'
       });
     }

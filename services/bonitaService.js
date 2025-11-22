@@ -1311,7 +1311,6 @@ class BonitaService {
         }
       });
 
-      console.log('Usuarios de Bonita:', JSON.stringify(response.data, null, 2));
       return response.data;
     } catch (error) {
       console.error('Error obteniendo usuarios:', error.response?.data || error.message);
