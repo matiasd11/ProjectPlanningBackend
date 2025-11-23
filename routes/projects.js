@@ -359,6 +359,10 @@ router.post('/:projectId/commitments', async (req, res) => {
 router.post('/:projectId/execute', projectController.executeProject);
 
 
+// POST - Completar proyecto (cambiar estado de EN_EJECUCION a COMPLETO y completar tarea de Bonita)
+router.post('/:projectId/complete', projectController.completeProject);
+
+
 // GET - Estado del proceso en Bonita para un proyecto
 router.get('/:id/bonita-status', async (req, res) => {
   try {
