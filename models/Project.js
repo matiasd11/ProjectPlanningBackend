@@ -48,6 +48,7 @@ const Project = sequelize.define('Project', {
       'PLANIFICADO', 
       'EN_EJECUCION',
       'COMPLETADO',
+      'FINALIZADO',
     ),
     defaultValue: 'GENERADO',
     allowNull: false

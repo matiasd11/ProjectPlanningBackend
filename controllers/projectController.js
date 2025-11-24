@@ -421,7 +421,7 @@ const projectController = {
     }
   },
 
-  completeProject: async (req, res) => {
+  finishProject: async (req, res) => {
     const transaction = await sequelize.transaction();
 
     try {
@@ -438,12 +438,12 @@ const projectController = {
         });
       }
 
-      // Validar que el proyecto está en estado PLANIFICADO
-      if (project.status !== 'EN_EJECUCION') {
+      // Validar que el proyecto está en estado COMPLETADO
+      if (project.status !== 'COMPLETADO') {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: `El proyecto debe estar en estado EN_EJECUCION para ser completado. Estado actual: ${project.status}`
+          message: `El proyecto debe estar en estado COMPLETADO para ser finalizado. Estado actual: ${project.status}`
         });
       }
 
@@ -456,12 +456,12 @@ const projectController = {
         });
       }
 
-      console.log(`🚀 Completando proyecto ${projectId} - Cambiando estado a COMPLETADO`);
+      console.log(`🚀 Finalizando proyecto ${projectId} - Cambiando estado a FINALIZADO`);
 
-      // Cambiar estado del proyecto a COMPLETADO
-      project.status = 'COMPLETADO';
+      // Cambiar estado del proyecto a FINALIZADO
+      project.status = 'FINALIZADO';
       await project.save({ transaction });
-      console.log(`✅ Proyecto ${projectId} actualizado a estado COMPLETADO`);
+      console.log(`✅ Proyecto ${projectId} actualizado a estado FINALIZADO`);
 
       // Obtener las tareas del caso en Bonita
       console.log(`🔍 Obteniendo tareas del caso de Bonita: ${project.bonitaCaseId}`);
@@ -489,7 +489,7 @@ const projectController = {
 
       res.json({
         success: true,
-        message: 'Proyecto completado exitosamente',
+        message: 'Proyecto finalizado exitosamente',
         data: {
           project: {
             id: project.id,
@@ -507,11 +507,11 @@ const projectController = {
 
     } catch (error) {
       await transaction.rollback();
-      console.error('❌ Error completando proyecto:', error);
+      console.error('❌ Error finalizando proyecto:', error);
 
       res.status(500).json({
         success: false,
-        message: 'Error completando proyecto',
+        message: 'Error finalizando proyecto',
         error: process.env.NODE_ENV === 'development' ? error.message : 'Error interno'
       });
     }
