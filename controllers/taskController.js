@@ -574,6 +574,8 @@ const taskController = {
      * @body {number} commitmentId - ID del compromiso
      */
     markCommitmentDone: async (req, res) => {
+        const transaction = await sequelize.transaction();
+
         try {
             const { username, password, commitmentId } = req.body;
 
@@ -591,7 +593,6 @@ const taskController = {
 
             console.log(`Llamando a Bonita Extension POST ${url}`);
 
-            // 👇 Enviamos el body en formato JSON (ahora el Groovy lo interpreta bien)
             const response = await axios.post(
                 url,
                 {
@@ -605,6 +606,80 @@ const taskController = {
                     }
                 }
             );
+
+            const projectId = response.data.data.task.projectId;
+            const localTasks = [];
+            const cloudTasks = [];
+            let localTasksError = null;
+            let cloudTasksError = null;
+
+            // Obtener tareas locales
+            try {
+                const where = { isCoverageRequest: false, projectId: parseInt(projectId) };
+                const tasks = await Task.findAll({ where });
+                localTasks.push(...tasks);
+            } catch (error) {
+                console.error('Error obteniendo tareas locales:', error);
+                localTasksError = error.message;
+            }
+
+            // Obtener tareas del cloud
+            if (username && password) {
+                try {
+                    // 🔐 Autenticación con Bonita
+                    const loggedIn = await bonitaService.authenticate(username, password);
+                    if (loggedIn) {
+                        const url = `${bonitaService.baseURL}/API/extension/getTasksByProject`;
+                        console.log(`📡 Llamando a Bonita Extension POST ${url}`);
+
+                        const response = await axios.post(
+                            url,
+                            { projectId: parseInt(projectId) },
+                            {
+                                headers: {
+                                    'Cookie': `${bonitaService.jsessionId}`,
+                                    'X-Bonita-API-Token': bonitaService.apiToken,
+                                    'Content-Type': 'application/json',
+                                },
+                            }
+                        );
+
+                        // Si response.data es un array, lo agregamos directamente
+                        // Si es un objeto con una propiedad data, la usamos
+                        const tasks = Array.isArray(response.data)
+                            ? response.data
+                            : (response.data?.data || response.data?.tasks || []);
+
+                        if (Array.isArray(tasks)) {
+                            cloudTasks.push(...tasks);
+                        }
+                    } else {
+                        cloudTasksError = 'No se pudo autenticar con Bonita';
+                    }
+                } catch (error) {
+                    console.error('Error obteniendo tareas del cloud:', error);
+                    cloudTasksError = error.response?.data || error.message;
+                }
+            }
+
+            // Combinar ambas listas
+            const allTasks = [...localTasks, ...cloudTasks];
+
+            // Verificar si todas las tareas están completadas
+            const allTasksCompleted = allTasks.every(task => task.status === 'done');
+
+            // Si están todas las tareas completadas, actualizar el estado del proyecto a COMPLETADO
+            if (allTasksCompleted) {
+                const project = await Project.findByPk(projectId, { transaction });
+
+                if (project && project.status !== 'COMPLETADO') {
+                    project.status = 'COMPLETADO';
+                    await project.save({ transaction });
+                    console.log(`✅ Proyecto ${projectId} actualizado a estado COMPLETADO - Todas las tareas están completadas`);
+                }
+            }
+
+            await transaction.commit();
 
             res.json({
                 success: true,
