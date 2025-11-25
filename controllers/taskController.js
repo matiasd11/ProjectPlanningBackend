@@ -755,14 +755,15 @@ const taskController = {
      * @desc Proxy a Bonita /API/extension/taskObservation tras autenticación
      * @body {string} username - Usuario Bonita
      * @body {string} password - Password Bonita
+     * @body {number} userId - ID del usuario que crea la observación
      * @body {number} taskId - ID de la tarea
      * @body {string} observations - Descripción de la observación
      */
     createTaskObservation: async (req, res) => {
         try {
-            const { username, password, taskId, observations } = req.body;
+            const { username, password, taskId, observations, userId } = req.body;
 
-            if (!username || !password || !taskId || !observations) {
+            if (!username || !password || !taskId || !observations || !userId) {
                 return res.status(400).json({ success: false, message: 'Faltan datos requeridos en el body' });
             }
 
@@ -776,12 +777,12 @@ const taskController = {
 
             console.log(`Llamando a Bonita Extension POST ${url}`);
 
-            // 👇 Enviamos el body en formato JSON (ahora el Groovy lo interpreta bien)
             const response = await axios.post(
                 url,
                 {
                     taskId,
-                    observations
+                    observations,
+                    userId
                 },
                 {
                     headers: {
@@ -808,6 +809,9 @@ const taskController = {
 
     /**
      * @desc Proxy a Bonita /API/extension/getTaskObservations (envía username, password y taskId en body)
+     * @body {string} username - Usuario Bonita
+     * @body {string} password - Password Bonita
+     * @body {number} taskId - ID de la tarea
      */
     getTaskObservations: async (req, res) => {
         try {
@@ -831,7 +835,6 @@ const taskController = {
             const url = `${bonitaService.baseURL}/API/extension/getTaskObservations`;
             console.log(`📡 Llamando a Bonita Extension POST ${url}`);
 
-            // 👇 Enviamos el body JSON igual que espera el Groovy
             const response = await axios.post(
                 url,
                 { taskId },
@@ -866,12 +869,14 @@ const taskController = {
      * @desc Proxy a Bonita /API/extension/taskObservationResolved tras autenticación
      * @body {string} username - Usuario Bonita
      * @body {string} password - Password Bonita
-     * @body {number} observationId - ID del compromiso
+     * @body {number} userId - ID del usuario que resuelve la observación
+     * @body {number} observationId - ID de la observación
+     * @body {string} resolution - Resolución de la observación
      */
     markTaskObservationResolved: async (req, res) => {
         try {
-            const { username, password, observationId } = req.body;
-            if (!username || !password || !observationId) {
+            const { username, password, observationId, userId, resolution } = req.body;
+            if (!username || !password || !observationId || !userId || !resolution) {
                 return res.status(400).json({ success: false, message: 'Faltan datos requeridos en el body' });
             }
 
@@ -885,11 +890,12 @@ const taskController = {
 
             console.log(`Llamando a Bonita Extension POST ${url}`);
 
-            // 👇 Enviamos el body en formato JSON (ahora el Groovy lo interpreta bien)
             const response = await axios.post(
                 url,
                 {
-                    observationId
+                    observationId,
+                    userId,
+                    resolution
                 },
                 {
                     headers: {
