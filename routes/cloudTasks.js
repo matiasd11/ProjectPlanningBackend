@@ -90,4 +90,10 @@ router.post('/extension/taskObservation', taskController.createTaskObservation);
  */
 router.post('/extension/resolveTaskObservation', taskController.markTaskObservationResolved);
 
+/**
+ * @route POST /api/v1/cloud-tasks/extension/getTotalTasks
+ * @desc Proxy a Bonita /API/extension/getTotalTasks sin parámetros
+ */
+router.post('/extension/getTotalTasks', taskController.getTotalTasks);
+
 module.exports = router;

@@ -920,6 +920,50 @@ const taskController = {
         }
     },
 
+    /**
+     * @desc Proxy a Bonita /API/extension/getTotalTasks sin parámetros
+     */
+    getTotalTasks: async (req, res) => {
+        try {
+            // 🔐 Autenticación con Bonita usando credenciales por defecto
+            const loggedIn = await bonitaService.authenticate();
+            if (!loggedIn) {
+                return res.status(500).json({
+                    success: false,
+                    message: 'No se pudo autenticar con Bonita',
+                });
+            }
+
+            const url = `${bonitaService.baseURL}/API/extension/getTotalTasks`;
+            console.log(`📡 Llamando a Bonita Extension POST ${url}`);
+
+            // 👇 No enviamos parámetros en el body
+            const response = await axios.post(
+                url,
+                {},
+                {
+                    headers: {
+                        'Cookie': `${bonitaService.jsessionId}`,
+                        'X-Bonita-API-Token': bonitaService.apiToken,
+                        'Content-Type': 'application/json',
+                    },
+                }
+            );
+
+            res.json({
+                success: true,
+                data: response.data,
+            });
+        } catch (error) {
+            console.error('❌ Error llamando a extension/getTotalTasks:', error.response?.data || error.message);
+            res.status(500).json({
+                success: false,
+                message: 'Error llamando a extension/getTotalTasks',
+                error: error.response?.data || error.message,
+            });
+        }
+    },
+
 };
 
 module.exports = taskController;
