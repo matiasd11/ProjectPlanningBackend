@@ -2,14 +2,16 @@ const express = require('express');
 const router = express.Router();
 const taskController = require('../controllers/taskController');
 
-/** 
+<<<<<<< HEAD
+=======
+/**
  * @route POST /api/v1/tasks/notifyObservation
  * @desc Notificación enviada desde Bonita indicando que se registró una nueva observación en un proyecto.
  * @param {number} projectId - ID del proyecto
 */
 router.post("/notifyObservation", taskController.notifyObservation);
 
-/** 
+/**
  * @route POST /api/v1/tasks/notifyCollaborativeTasks
  * @desc Notificación enviada desde Bonita indicando que existen nuevas tareas colaborativas en el cloud.
  * @param {number} projectId - ID del proyecto
@@ -22,6 +24,7 @@ router.post("/notifyCollaborativeTasks", taskController.notifyCollaborativeTasks
  * @param {string} caseId - ID del caso en Bonita
  */
 router.get('/coverage-request/:caseId/status', taskController.getCoverageRequestStatus);
+>>>>>>> rama/email
 
 /**
  * @route GET /api/v1/tasks/local/:projectId
