@@ -3,6 +3,8 @@ const { User, Task, Project } = models;
 const { sequelize } = require('../config/database');
 const bonitaService = require('../services/bonitaService');
 const axios = require('axios');
+const { sendEmail } = require('../services/emailService');
+
 
 const taskController = {
 
@@ -198,6 +200,97 @@ const taskController = {
     //===============================================================================================//
     //========================================= CLOUD TASKS =========================================//
     //===============================================================================================//
+
+    /**
+ * @desc Notificación desde Bonita de que existen nuevas tareas colaborativas en el cloud
+ * @route POST /api/notifyCollaborativeTasks
+ * @body {number} projectId - ID del proyecto
+ * @body {string} message - Mensaje enviado por Bonita
+ */
+    notifyCollaborativeTasks: async (req, res) => {
+        try {
+            const { projectId } = req.body;
+
+            console.log("📩 Notificación colaborativa recibida desde Bonita:");
+            console.log("Proyecto:", projectId);
+
+            // --------------------------------------------
+            // 1. Buscar ONG asociada al proyecto
+            // --------------------------------------------
+            const project = await Project.findByPk(projectId);
+
+            if (!project) {
+                return res.status(404).json({
+                    error: "No existe una ONG colaborativa asociada al proyecto."
+                });
+            }
+
+            const message = `Hola,\n\nSe han creado nuevas tareas colaborativas para el proyecto "${project.name}". Por favor, ingresa al sistema para revisarlas y asignarte a las que puedas ayudar.\n\n¡Gracias por tu colaboración!\n\nSaludos,\nEquipo de Project Planning`;
+
+            // --------------------------------------------
+            // 2. Enviar notificación (email)
+            // --------------------------------------------
+
+            // Ejemplo: enviar email
+            await sendEmail({
+                to: "fdmalbran@gmail.com", // mail prueba 
+                subject: `Nuevas tareas colaborativas en "${project.name}"`,
+                text: message,
+                auth: {
+                    user: process.env.GMAIL_USER,
+                    pass: process.env.GMAIL_PASS
+                }
+            });
+
+            return res.json({
+                status: "OK",
+                notified: true
+            });
+
+        } catch (err) {
+            console.error("❌ Error en notifyCollaborativeTasks:", err);
+            return res.status(500).json({
+                error: "Error al procesar la notificación desde Bonita"
+            });
+        }
+    },
+
+    notifyObservation: async (req, res) => {
+        try {
+
+
+            console.log("📩 Notificación de observación recibida desde Bonita:");
+
+
+            const message = `Hola,\n\nSe ha registrado una nueva observación"."\n\nPor favor ingresa al sistema para revisarla.\n\nSaludos,\nEquipo de Project Planning`;
+
+            // 2. Enviar notificación a dos correos
+            await sendEmail({
+                to: [
+                    "fdmalbran@gmail.com",
+                    "fdmalbran@gmail.com" // modificar mails 
+                ],
+                subject: `Nueva observación"`,
+                text: message,
+                auth: {
+                    user: process.env.GMAIL_USER,
+                    pass: process.env.GMAIL_PASS
+                }
+            });
+
+            return res.json({
+                status: "OK",
+                notified: true
+            });
+
+        } catch (err) {
+            console.error("❌ Error en notifyObservation:", err);
+            return res.status(500).json({
+                error: "Error al procesar la notificación de observación desde Bonita"
+            });
+        }
+    },
+
 
     /**
      * @desc Proxy a Bonita /API/extension/getTasksByProject (envía username, password y projectId en body)
