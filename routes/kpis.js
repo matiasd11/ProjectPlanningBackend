@@ -1,19 +1,20 @@
 const express = require('express');
 const router = express.Router();
-const { models } = require('../models');
+const { models, sequelize } = require('../models');
 const { Task } = models;
+const { Op } = require('sequelize');
 const taskController = require('../controllers/taskController');
 const bonitaService = require('../services/bonitaService');
 const axios = require('axios');
 
 /**
  * @route GET /api/v1/kpis/total-tasks
- * @desc Obtiene el total de tareas combinando cloud (Bonita) y base de datos local
+ * @desc Obtiene el total de tareas combinando cloud (Bonita) y base de datos local con datos por día
  */
 router.get('/total-tasks', async (req, res) => {
     try {
         // 1️⃣ Obtener tareas del cloud (Bonita extension)
-        let cloudTasks = 0;
+        let cloudData = { total: 0, period: null, tasksPerDay: [] };
         try {
             // 🔐 Autenticación con Bonita
             const loggedIn = await bonitaService.authenticate();
@@ -33,33 +34,75 @@ router.get('/total-tasks', async (req, res) => {
                     }
                 );
 
-                cloudTasks = response.data?.data?.totalTasks || 0;
-                console.log(`☁️ Tareas del cloud: ${cloudTasks}`);
+                if (response.data?.data) {
+                    cloudData = response.data.data;
+                }
+                console.log(`☁️ Tareas del cloud - Total: ${cloudData.total}`);
             }
         } catch (cloudError) {
             console.warn('⚠️ Error obteniendo tareas del cloud:', cloudError.message);
-            cloudTasks = 0;
         }
 
-        // 2️⃣ Obtener tareas de la base de datos local
+        // 2️⃣ Obtener tareas locales totales
         const localTasksCount = await Task.count();
         console.log(`💾 Tareas locales: ${localTasksCount}`);
 
-        // 3️⃣ Calcular el total
-        const totalTasks = cloudTasks + localTasksCount;
+        // 3️⃣ Obtener tareas locales por día (últimos 30 días)
+        // Como no tenemos timestamps habilitados, usaremos dueDate o generaremos datos simples
+        const localTasksPerDay = [];
+
+        // Para simplificar, por ahora creamos una entrada con todas las tareas locales para hoy
+        const today = new Date().toISOString().split('T')[0];
+        if (localTasksCount > 0) {
+            localTasksPerDay.push({
+                get: (field) => field === 'date' ? today : localTasksCount
+            });
+        }
+
+        // 4️⃣ Combinar datos por día
+        const tasksPerDayMap = new Map();
+
+        // Agregar datos del cloud
+        cloudData.tasksPerDay?.forEach(day => {
+            tasksPerDayMap.set(day.date, { date: day.date, total: day.total });
+        });
+
+        // Agregar datos locales
+        localTasksPerDay.forEach(day => {
+            const date = day.get('date');
+            const localTotal = parseInt(day.get('total'));
+            const existing = tasksPerDayMap.get(date);
+
+            if (existing) {
+                existing.total += localTotal;
+            } else {
+                tasksPerDayMap.set(date, { date, total: localTotal });
+            }
+        });
+
+        // 5️⃣ Convertir a array y ordenar
+        const combinedTasksPerDay = Array.from(tasksPerDayMap.values())
+            .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // 6️⃣ Calcular totales
+        const totalTasks = cloudData.total + localTasksCount;
 
         res.json({
             success: true,
             data: {
-                cloudTasks,
-                localTasks: localTasksCount,
-                totalTasks,
+                total: totalTasks,
+                period: cloudData.period || {
+                    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                    endDate: new Date().toISOString().split('T')[0],
+                    days: 30
+                },
+                tasksPerDay: combinedTasksPerDay,
                 breakdown: {
-                    cloud: cloudTasks,
+                    cloud: cloudData.total,
                     local: localTasksCount
                 }
             },
-            message: `Total de tareas: ${totalTasks} (${cloudTasks} cloud + ${localTasksCount} local)`
+            message: `Total de tareas: ${totalTasks} (${cloudData.total} cloud + ${localTasksCount} local)`
         });
 
     } catch (error) {
@@ -74,12 +117,12 @@ router.get('/total-tasks', async (req, res) => {
 
 /**
  * @route GET /api/v1/kpis/total-tasks-todo
- * @desc Obtiene el total de tareas con status TODO combinando cloud (Bonita) y base de datos local
+ * @desc Obtiene el total de tareas con status TODO combinando cloud (Bonita) y base de datos local con datos por día
  */
 router.get('/total-tasks-todo', async (req, res) => {
     try {
         // 1️⃣ Obtener tareas TODO del cloud (Bonita extension)
-        let cloudTasksTodo = 0;
+        let cloudData = { total: 0, period: null, tasksPerDay: [] };
         try {
             // 🔐 Autenticación con Bonita
             const loggedIn = await bonitaService.authenticate();
@@ -99,37 +142,76 @@ router.get('/total-tasks-todo', async (req, res) => {
                     }
                 );
 
-                cloudTasksTodo = response.data?.data?.totalTasksTodo || 0;
-                console.log(`☁️ Tareas TODO del cloud: ${cloudTasksTodo}`);
+                if (response.data?.data) {
+                    cloudData = response.data.data;
+                }
+                console.log(`☁️ Tareas TODO del cloud - Total: ${cloudData.total}`);
             }
         } catch (cloudError) {
             console.warn('⚠️ Error obteniendo tareas TODO del cloud:', cloudError.message);
-            cloudTasksTodo = 0;
         }
 
-        // 2️⃣ Obtener tareas TODO de la base de datos local
+        // 2️⃣ Obtener tareas TODO locales totales
         const localTasksTodoCount = await Task.count({
-            where: {
-                status: 'todo'
-            }
+            where: { status: 'todo' }
         });
         console.log(`💾 Tareas TODO locales: ${localTasksTodoCount}`);
 
-        // 3️⃣ Calcular el total
-        const totalTasksTodo = cloudTasksTodo + localTasksTodoCount;
+        // 3️⃣ Obtener tareas TODO locales por día
+        const localTasksPerDay = [];
+
+        // Para simplificar, por ahora creamos una entrada con todas las tareas TODO locales para hoy
+        const today = new Date().toISOString().split('T')[0];
+        if (localTasksTodoCount > 0) {
+            localTasksPerDay.push({
+                get: (field) => field === 'date' ? today : localTasksTodoCount
+            });
+        }
+
+        // 4️⃣ Combinar datos por día
+        const tasksPerDayMap = new Map();
+
+        // Agregar datos del cloud
+        cloudData.tasksPerDay?.forEach(day => {
+            tasksPerDayMap.set(day.date, { date: day.date, total: day.total });
+        });
+
+        // Agregar datos locales
+        localTasksPerDay.forEach(day => {
+            const date = day.get('date');
+            const localTotal = parseInt(day.get('total'));
+            const existing = tasksPerDayMap.get(date);
+
+            if (existing) {
+                existing.total += localTotal;
+            } else {
+                tasksPerDayMap.set(date, { date, total: localTotal });
+            }
+        });
+
+        // 5️⃣ Convertir a array y ordenar
+        const combinedTasksPerDay = Array.from(tasksPerDayMap.values())
+            .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // 6️⃣ Calcular totales
+        const totalTasksTodo = cloudData.total + localTasksTodoCount;
 
         res.json({
             success: true,
             data: {
-                cloudTasksTodo,
-                localTasksTodo: localTasksTodoCount,
-                totalTasksTodo,
+                total: totalTasksTodo,
+                period: cloudData.period || {
+                    startDate: thirtyDaysAgo.toISOString().split('T')[0],
+                    endDate: new Date().toISOString().split('T')[0],
+                    days: 30
+                },
+                tasksPerDay: combinedTasksPerDay,
                 breakdown: {
-                    cloud: cloudTasksTodo,
+                    cloud: cloudData.total,
                     local: localTasksTodoCount
                 }
             },
-            message: `Total de tareas TODO: ${totalTasksTodo} (${cloudTasksTodo} cloud + ${localTasksTodoCount} local)`
+            message: `Total de tareas TODO: ${totalTasksTodo} (${cloudData.total} cloud + ${localTasksTodoCount} local)`
         });
 
     } catch (error) {
@@ -144,12 +226,12 @@ router.get('/total-tasks-todo', async (req, res) => {
 
 /**
  * @route GET /api/v1/kpis/total-tasks-in-progress
- * @desc Obtiene el total de tareas con status IN-PROGRESS combinando cloud (Bonita) y base de datos local
+ * @desc Obtiene el total de tareas con status IN-PROGRESS combinando cloud (Bonita) y base de datos local con datos por día
  */
 router.get('/total-tasks-in-progress', async (req, res) => {
     try {
         // 1️⃣ Obtener tareas IN-PROGRESS del cloud (Bonita extension)
-        let cloudTasksInProgress = 0;
+        let cloudData = { total: 0, period: null, tasksPerDay: [] };
         try {
             // 🔐 Autenticación con Bonita
             const loggedIn = await bonitaService.authenticate();
@@ -169,37 +251,76 @@ router.get('/total-tasks-in-progress', async (req, res) => {
                     }
                 );
 
-                cloudTasksInProgress = response.data?.data?.totalTasksInProgress || 0;
-                console.log(`☁️ Tareas IN-PROGRESS del cloud: ${cloudTasksInProgress}`);
+                if (response.data?.data) {
+                    cloudData = response.data.data;
+                }
+                console.log(`☁️ Tareas IN-PROGRESS del cloud - Total: ${cloudData.total}`);
             }
         } catch (cloudError) {
             console.warn('⚠️ Error obteniendo tareas IN-PROGRESS del cloud:', cloudError.message);
-            cloudTasksInProgress = 0;
         }
 
-        // 2️⃣ Obtener tareas IN-PROGRESS de la base de datos local
+        // 2️⃣ Obtener tareas IN-PROGRESS locales totales
         const localTasksInProgressCount = await Task.count({
-            where: {
-                status: 'in-progress'
-            }
+            where: { status: 'in-progress' }
         });
         console.log(`💾 Tareas IN-PROGRESS locales: ${localTasksInProgressCount}`);
 
-        // 3️⃣ Calcular el total
-        const totalTasksInProgress = cloudTasksInProgress + localTasksInProgressCount;
+        // 3️⃣ Obtener tareas IN-PROGRESS locales por día
+        const localTasksPerDay = [];
+
+        // Para simplificar, por ahora creamos una entrada con todas las tareas IN-PROGRESS locales para hoy
+        const today = new Date().toISOString().split('T')[0];
+        if (localTasksInProgressCount > 0) {
+            localTasksPerDay.push({
+                get: (field) => field === 'date' ? today : localTasksInProgressCount
+            });
+        }
+
+        // 4️⃣ Combinar datos por día
+        const tasksPerDayMap = new Map();
+
+        // Agregar datos del cloud
+        cloudData.tasksPerDay?.forEach(day => {
+            tasksPerDayMap.set(day.date, { date: day.date, total: day.total });
+        });
+
+        // Agregar datos locales
+        localTasksPerDay.forEach(day => {
+            const date = day.get('date');
+            const localTotal = parseInt(day.get('total'));
+            const existing = tasksPerDayMap.get(date);
+
+            if (existing) {
+                existing.total += localTotal;
+            } else {
+                tasksPerDayMap.set(date, { date, total: localTotal });
+            }
+        });
+
+        // 5️⃣ Convertir a array y ordenar
+        const combinedTasksPerDay = Array.from(tasksPerDayMap.values())
+            .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // 6️⃣ Calcular totales
+        const totalTasksInProgress = cloudData.total + localTasksInProgressCount;
 
         res.json({
             success: true,
             data: {
-                cloudTasksInProgress,
-                localTasksInProgress: localTasksInProgressCount,
-                totalTasksInProgress,
+                total: totalTasksInProgress,
+                period: cloudData.period || {
+                    startDate: thirtyDaysAgo.toISOString().split('T')[0],
+                    endDate: new Date().toISOString().split('T')[0],
+                    days: 30
+                },
+                tasksPerDay: combinedTasksPerDay,
                 breakdown: {
-                    cloud: cloudTasksInProgress,
+                    cloud: cloudData.total,
                     local: localTasksInProgressCount
                 }
             },
-            message: `Total de tareas IN-PROGRESS: ${totalTasksInProgress} (${cloudTasksInProgress} cloud + ${localTasksInProgressCount} local)`
+            message: `Total de tareas IN-PROGRESS: ${totalTasksInProgress} (${cloudData.total} cloud + ${localTasksInProgressCount} local)`
         });
 
     } catch (error) {
@@ -214,12 +335,12 @@ router.get('/total-tasks-in-progress', async (req, res) => {
 
 /**
  * @route GET /api/v1/kpis/total-tasks-done
- * @desc Obtiene el total de tareas con status DONE combinando cloud (Bonita) y base de datos local
+ * @desc Obtiene el total de tareas con status DONE combinando cloud (Bonita) y base de datos local con datos por día
  */
 router.get('/total-tasks-done', async (req, res) => {
     try {
         // 1️⃣ Obtener tareas DONE del cloud (Bonita extension)
-        let cloudTasksDone = 0;
+        let cloudData = { total: 0, period: null, tasksPerDay: [] };
         try {
             // 🔐 Autenticación con Bonita
             const loggedIn = await bonitaService.authenticate();
@@ -239,37 +360,76 @@ router.get('/total-tasks-done', async (req, res) => {
                     }
                 );
 
-                cloudTasksDone = response.data?.data?.totalTasksDone || 0;
-                console.log(`☁️ Tareas DONE del cloud: ${cloudTasksDone}`);
+                if (response.data?.data) {
+                    cloudData = response.data.data;
+                }
+                console.log(`☁️ Tareas DONE del cloud - Total: ${cloudData.total}`);
             }
         } catch (cloudError) {
             console.warn('⚠️ Error obteniendo tareas DONE del cloud:', cloudError.message);
-            cloudTasksDone = 0;
         }
 
-        // 2️⃣ Obtener tareas DONE de la base de datos local
+        // 2️⃣ Obtener tareas DONE locales totales
         const localTasksDoneCount = await Task.count({
-            where: {
-                status: 'done'
-            }
+            where: { status: 'done' }
         });
         console.log(`💾 Tareas DONE locales: ${localTasksDoneCount}`);
 
-        // 3️⃣ Calcular el total
-        const totalTasksDone = cloudTasksDone + localTasksDoneCount;
+        // 3️⃣ Obtener tareas DONE locales por día
+        const localTasksPerDay = [];
+
+        // Para simplificar, por ahora creamos una entrada con todas las tareas DONE locales para hoy
+        const today = new Date().toISOString().split('T')[0];
+        if (localTasksDoneCount > 0) {
+            localTasksPerDay.push({
+                get: (field) => field === 'date' ? today : localTasksDoneCount
+            });
+        }
+
+        // 4️⃣ Combinar datos por día
+        const tasksPerDayMap = new Map();
+
+        // Agregar datos del cloud
+        cloudData.tasksPerDay?.forEach(day => {
+            tasksPerDayMap.set(day.date, { date: day.date, total: day.total });
+        });
+
+        // Agregar datos locales
+        localTasksPerDay.forEach(day => {
+            const date = day.get('date');
+            const localTotal = parseInt(day.get('total'));
+            const existing = tasksPerDayMap.get(date);
+
+            if (existing) {
+                existing.total += localTotal;
+            } else {
+                tasksPerDayMap.set(date, { date, total: localTotal });
+            }
+        });
+
+        // 5️⃣ Convertir a array y ordenar
+        const combinedTasksPerDay = Array.from(tasksPerDayMap.values())
+            .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // 6️⃣ Calcular totales
+        const totalTasksDone = cloudData.total + localTasksDoneCount;
 
         res.json({
             success: true,
             data: {
-                cloudTasksDone,
-                localTasksDone: localTasksDoneCount,
-                totalTasksDone,
+                total: totalTasksDone,
+                period: cloudData.period || {
+                    startDate: thirtyDaysAgo.toISOString().split('T')[0],
+                    endDate: new Date().toISOString().split('T')[0],
+                    days: 30
+                },
+                tasksPerDay: combinedTasksPerDay,
                 breakdown: {
-                    cloud: cloudTasksDone,
+                    cloud: cloudData.total,
                     local: localTasksDoneCount
                 }
             },
-            message: `Total de tareas DONE: ${totalTasksDone} (${cloudTasksDone} cloud + ${localTasksDoneCount} local)`
+            message: `Total de tareas DONE: ${totalTasksDone} (${cloudData.total} cloud + ${localTasksDoneCount} local)`
         });
 
     } catch (error) {
