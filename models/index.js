@@ -216,24 +216,10 @@ const seedData = async () => {
       'ONG Gerencial',
       'Usuario encargado de monitorear proyectos'
     );
-
-    await bonitaService.createRoleIfNotExists(
-      'ONG_SUPERVISORA',
-      'ONG Supervisora',
-      'Usuario encargado de crear, coordinar y monitorear proyectos'
-    );
-
+    
 
     // Crear usuarios de prueba en Bonita y guardar sus respuestas
     let bonitaUsers = [];
-    
-    let ongSupervisora = await bonitaService.createUser({
-      username: 'ongSupervisora',
-      password: 'ongSupervisora123!',
-      organizationName: 'ongSupervisora',
-      roles: ['ONG_SUPERVISORA']
-    });
-    bonitaUsers.push(ongSupervisora);
 
     let ongPrincipal = await bonitaService.createUser({
       username: 'ongPrincipal',
