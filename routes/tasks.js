@@ -3,6 +3,13 @@ const router = express.Router();
 const taskController = require('../controllers/taskController');
 
 /** 
+ * @route POST /api/v1/tasks/notifyObservation
+ * @desc Notificación enviada desde Bonita indicando que se registró una nueva observación en un proyecto.
+ * @param {number} projectId - ID del proyecto
+*/
+router.post("/notifyObservation", taskController.notifyObservation);
+
+/** 
  * @route POST /api/v1/tasks/notifyCollaborativeTasks
  * @desc Notificación enviada desde Bonita indicando que existen nuevas tareas colaborativas en el cloud.
  * @param {number} projectId - ID del proyecto

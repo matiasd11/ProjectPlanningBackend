@@ -195,7 +195,11 @@ const taskController = {
             await sendEmail({
                 to: "fdmalbran@gmail.com", // mail prueba 
                 subject: `Nuevas tareas colaborativas en "${project.name}"`,
-                text: message
+                text: message,
+                auth: {
+                    user: process.env.GMAIL_USER,
+                    pass: process.env.GMAIL_PASS
+                }
             });
 
             return res.json({
@@ -210,6 +214,43 @@ const taskController = {
             });
         }
     },
+
+    notifyObservation: async (req, res) => {
+        try {
+
+
+            console.log("📩 Notificación de observación recibida desde Bonita:");
+
+
+            const message = `Hola,\n\nSe ha registrado una nueva observación"."\n\nPor favor ingresa al sistema para revisarla.\n\nSaludos,\nEquipo de Project Planning`;
+
+            // 2. Enviar notificación a dos correos
+            await sendEmail({
+                to: [
+                    "fdmalbran@gmail.com",
+                    "fdmalbran@gmail.com" // modificar mails 
+                ],
+                subject: `Nueva observación"`,
+                text: message,
+                auth: {
+                    user: process.env.GMAIL_USER,
+                    pass: process.env.GMAIL_PASS
+                }
+            });
+
+            return res.json({
+                status: "OK",
+                notified: true
+            });
+
+        } catch (err) {
+            console.error("❌ Error en notifyObservation:", err);
+            return res.status(500).json({
+                error: "Error al procesar la notificación de observación desde Bonita"
+            });
+        }
+    },
+
 
     /**
      * @desc Proxy a Bonita /API/extension/getTasksByProject (envía username, password y projectId en body)

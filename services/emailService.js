@@ -1,13 +1,13 @@
 const nodemailer = require("nodemailer");
 
-async function sendEmail({ to, subject, text }) {
+async function sendEmail({ to, subject, text, auth }) {
 
     try {
         const transporter = nodemailer.createTransport({
             service: "gmail",
             auth: {
-                user: process.env.GMAIL_USER,
-                pass: process.env.GMAIL_PASS // no la password común, sino una App Password
+                user: auth.user,
+                pass: auth.pass
             }
         });
 
