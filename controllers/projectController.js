@@ -44,6 +44,112 @@ const projectController = {
     }
   },
 
+  getProjectsByCollaboratorId: async (req, res) => {
+    try {
+
+      const { username, password, status, collaboratorId } = req.body;
+
+      if (!username || !password || !collaboratorId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Faltan datos requeridos en el body',
+        });
+      }
+
+      // 🔐 Autenticación con Bonita
+      const loggedIn = await bonitaService.authenticate(username, password);
+      if (!loggedIn) {
+        return res.status(500).json({
+          success: false,
+          message: 'No se pudo autenticar con Bonita',
+        });
+      }
+
+      const url = `${bonitaService.baseURL}/API/extension/getTasksByCollaboratorId`;
+      console.log(`📡 Buscando tareas colaborativas del usuario ${collaboratorId}`);
+      const response = await axios.post(
+        url,
+        {
+          collaboratorId: collaboratorId
+        },
+        {
+          headers: {
+            'Cookie': `${bonitaService.jsessionId}`,
+            'X-Bonita-API-Token': bonitaService.apiToken,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.data && response.data.success) {
+        collaborativeTasks = response.data.data || [];
+        console.log(`✅ Tareas colaborativas encontradas: ${collaborativeTasks.length}`);
+      } else {
+        console.warn('⚠️ Respuesta del cloud sin éxito:', response.data);
+      }
+
+
+      // Extraer projectIds únicos de las tareas colaborativas
+      const projectIdsWithCollaboratorTasks = new Set();
+
+      collaborativeTasks.forEach(task => {
+        if (task.projectId) {
+          projectIdsWithCollaboratorTasks.add(task.projectId);
+        }
+      });
+
+      console.log(`📊 Proyectos encontrados con tareas del colaborador ${collaboratorId}: ${projectIdsWithCollaboratorTasks.size}`);
+
+      // Si no se encontraron projectIds, retornar array vacío
+      if (projectIdsWithCollaboratorTasks.size === 0) {
+        return res.json({
+          success: true,
+          data: [],
+        });
+      }
+
+      const { Op } = require('sequelize');
+
+      // Obtener los proyectos de la BD local con los IDs encontrados
+      const where = {
+        id: {
+          [Op.in]: Array.from(projectIdsWithCollaboratorTasks)
+        }
+      };
+
+      // Aplicar filtro de status si viene
+      if (status) {
+        where.status = {
+          [Op.in]: status
+        };
+        console.log('🔍 Filtrando por status:', status);
+      }
+
+      const projects = await Project.findAll({
+        where,
+        order: [['created_at', 'DESC']]
+      });
+
+      console.log(`✅ Proyectos finales encontrados: ${projects.length}`);
+
+      res.json({
+        success: true,
+        data: projects,
+      });
+      
+    } catch (error) {
+      console.error(
+        '❌ Error llamando a extension/getTasksByCollaboratorId:',
+        error.response?.data || error.message
+      );
+      res.status(500).json({
+        success: false,
+        message: 'Error llamando a extension/getTasksByCollaboratorId',
+        error: error.response?.data || error.message,
+      });
+    }
+  },
+
   createProject: async (req, res) => {
     const transaction = await sequelize.transaction();
 

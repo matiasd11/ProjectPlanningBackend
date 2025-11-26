@@ -11,6 +11,9 @@ const axios = require('axios');
 // POST - Listar proyectos por ONG y/o status
 router.post('/filter', projectController.getProjects);
 
+ // POST - Obtener proyectos que tienen tareas colaborativas tomadas por un colaborador específico
+router.post('/filter-by-collaborator', projectController.getProjectsByCollaboratorId);
+
 
 // POST - Obtener todas las tareas (locales + cloud) de un proyecto
 router.post('/:projectId/tasks', async (req, res) => {
@@ -140,69 +143,6 @@ router.post('/:projectId/tasks', async (req, res) => {
     });
   }
 });
-
-
-// GET - Listar proyectos
-// router.get('/', async (req, res) => {
-//   try {
-//     const { status, page = 1, limit = 10 } = req.query;
-
-//     const where = {};
-//     if (status) where.status = status;
-
-//     const offset = (page - 1) * limit;
-
-//     const { count, rows } = await Project.findAndCountAll({
-//       where,
-//       include: [
-//         {
-//           model: User,
-//           as: 'creator',
-//           attributes: ['id', 'username', 'organizationName']
-//         },
-//         {
-//           model: Task,
-//           as: 'tasks',
-//           attributes: ['id', 'title', 'status'],
-//           include: [
-//             {
-//               model: User,
-//               as: 'volunteer',
-//               attributes: ['id', 'username', 'organizationName'],
-//               required: false
-//             },
-//             {
-//               model: TaskType,
-//               as: 'taskType',
-//               attributes: ['id', 'title'],
-//               required: false
-//             }
-//           ]
-//         }
-//       ],
-//       limit: parseInt(limit),
-//       offset: parseInt(offset),
-//       order: [['created_at', 'DESC']]
-//     });
-
-//     res.json({
-//       success: true,
-//       data: rows,
-//       pagination: {
-//         total: count,
-//         page: parseInt(page),
-//         pages: Math.ceil(count / limit),
-//         limit: parseInt(limit)
-//       }
-//     });
-//   } catch (error) {
-//     console.error('Error getting projects:', error);
-//     res.status(500).json({
-//       success: false,
-//       message: 'Error obteniendo proyectos'
-//     });
-//   }
-// });
 
 
 // GET - Obtener proyecto por ID con detalles de Bonita
@@ -354,6 +294,7 @@ router.post('/:projectId/commitments', async (req, res) => {
     });
   }
 });
+
 
 // POST - Ejecutar proyecto (cambiar estado de PLANIFICADO a EN_EJECUCION y completar tarea de Bonita)
 router.post('/:projectId/execute', projectController.executeProject);
