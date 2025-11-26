@@ -2,12 +2,6 @@ const express = require('express');
 const router = express.Router();
 const taskController = require('../controllers/taskController');
 
-/**
- * @route GET /api/v1/tasks/coverage-request/:caseId/status
- * @desc Obtener estado de coverage request en Bonita
- * @param {string} caseId - ID del caso en Bonita
- */
-router.get('/coverage-request/:caseId/status', taskController.getCoverageRequestStatus);
 
 /**
  * @route GET /api/v1/tasks/local/:projectId
@@ -15,6 +9,20 @@ router.get('/coverage-request/:caseId/status', taskController.getCoverageRequest
  * @param {number} projectId - ID del proyecto (opcional)
  */
 router.get('/local/:projectId', taskController.getLocalTasks);
+
+/**
+ * @route PUT /api/v1/tasks/local/:taskId/done
+ * @desc Marcar una tarea local como cumplida
+ * @param {number} taskId - ID de la tarea
+ */
+router.put('/local/:taskId/done', taskController.markLocalTaskAsDone);
+
+/**
+ * @route GET /api/v1/tasks/coverage-request/:caseId/status
+ * @desc Obtener estado de coverage request en Bonita
+ * @param {string} caseId - ID del caso en Bonita
+ */
+router.get('/coverage-request/:caseId/status', taskController.getCoverageRequestStatus);
 
 /**
  * @route PUT /api/v1/tasks/:taskId/take

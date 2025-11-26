@@ -39,6 +39,46 @@ const taskController = {
     },
 
     /**
+     * @desc Marcar una tarea local como cumplida
+     * @param {number} taskId - ID de la tarea
+     */
+    markLocalTaskAsDone: async (req, res) => {
+        try {
+            const { taskId } = req.params;
+
+            const task = await Task.findByPk(taskId);
+            if (!task) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Tarea no encontrada'
+                });
+            }
+
+            if (task.status !== 'in_progress') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Tarea no está en estado in_progress'
+                });
+            }
+
+            await task.update({ status: 'done' });
+
+            res.json({
+                success: true,
+                message: 'Tarea marcada como cumplida',
+                data: task
+            });
+        } catch (error) {
+            console.error('Error marking local task as done:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Error marcando tarea local como cumplida',
+                error: error.message
+            });
+        }
+    },
+
+    /**
      * @desc Obtener estado de coverage request en Bonita
      * @param {string} caseId - ID del caso en Bonita
      */
