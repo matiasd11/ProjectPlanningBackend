@@ -60,29 +60,35 @@ router.post('/extension/assignCommitment', taskController.assignCommitment);
 router.post('/extension/commitmentDone', taskController.markCommitmentDone);
 
 /**
- * @route POST /api/v1/cloud-tasks/extension/taskObservation
- * @desc Proxy a Bonita /API/extension/taskObservation tras autenticación
+ * @route POST /api/v1/cloud-tasks/extension/getTaskObservations
+ * @desc Proxy a Bonita /API/extension/getTaskObservations tras autenticación
  * @body {string} username - Usuario Bonita
  * @body {string} password - Password Bonita
  * @body {number} taskId - ID de la tarea
- * @body {string} observation - Descripción de la observación
- */
-router.post('/extension/taskObservation', taskController.createTaskObservation);
-
-/**
- * @route POST /api/v1/cloud-tasks/extension/getTaskObservations
- * @desc Proxy a Bonita /API/extension/getTaskObservations tras autenticación
  */
 router.post('/extension/getTaskObservations', taskController.getTaskObservations);
 
 /**
- * @route POST /api/v1/cloud-tasks/extension/taskObservationResolved
- * @desc Proxy a Bonita /API/extension/taskObservationResolved tras autenticación
+ * @route POST /api/v1/cloud-tasks/extension/taskObservation
+ * @desc Proxy a Bonita /API/extension/taskObservation tras autenticación
  * @body {string} username - Usuario Bonita
  * @body {string} password - Password Bonita
- * @body {number} observationId - ID de la observación
+ * @body {number} userId - ID del usuario que crea la observación
+ * @body {number} taskId - ID de la tarea
+ * @body {string} observations - Descripción de la observación
  */
-router.post('/extension/taskObservationResolved', taskController.markTaskObservationResolved);
+router.post('/extension/taskObservation', taskController.createTaskObservation);
+
+/**
+ * @route POST /api/v1/cloud-tasks/extension/resolveTaskObservation
+ * @desc Proxy a Bonita /API/extension/resolveTaskObservation tras autenticación
+ * @body {string} username - Usuario Bonita
+ * @body {string} password - Password Bonita
+ * @body {number} userId - ID del usuario que resuelve la observación
+ * @body {number} observationId - ID de la observación
+ * @body {string} resolution - Resolución de la observación
+ */
+router.post('/extension/resolveTaskObservation', taskController.markTaskObservationResolved);
 
 /**
  * @route POST /api/v1/cloud-tasks/extension/getTotalTasks
