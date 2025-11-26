@@ -48,6 +48,9 @@ services:
       # Configuración para hot-reload en Windows
       CHOKIDAR_USEPOLLING: "true"
       CHOKIDAR_INTERVAL: 1000
+      # gmail credentials for notifications
+      GMAIL_USER: ${GMAIL_USER}
+      GMAIL_PASS: ${GMAIL_PASS}
     volumes:
       # Montar el código fuente para hot-reload
       # El código se monta desde el host, permitiendo cambios en tiempo real
