@@ -317,10 +317,18 @@ const projectController = {
       // Cambiar estado del proyecto a EN_EJECUCION
       project.status = 'EN_EJECUCION';
       await project.save({ transaction });
-
       console.log(`✅ Proyecto ${projectId} actualizado a estado EN_EJECUCION`);
 
-      // Recuperar y cambiar estado de las tareas del cloud a in_progress
+      // Recuperar tareas locales para cambiar su estado a 'in_progress'
+      const localTasks = await Task.findAll({ where: { projectId } });
+      console.log(`📋 Tareas locales encontradas:`, localTasks.map(t => ({ id: t.id, name: t.title, status: t.status })));
+      for (const task of localTasks) {
+        task.status = 'in_progress';
+        await task.save({ transaction });
+        console.log(`✅ Tarea ${task.id} actualizada exitosamente`);
+      }
+
+      // Recuperar tareas del cloud para cambiar su estado a 'in_progress'
       const url = `${bonitaService.baseURL}/API/extension/getTasksByProject`;
       console.log(`📡 Llamando a Bonita Extension POST ${url}`);
 
@@ -338,7 +346,7 @@ const projectController = {
 
       const projectTasks = response.data.data || [];
 
-      // Actualizar cada tarea del proyecto a 'in_progress'
+      // Actualizar cada tarea colaborativa del proyecto a 'in_progress'
       console.log(`🔄 Actualizando ${projectTasks.length} tareas a estado 'in_progress'`);
       for (const task of projectTasks) {
         try {
