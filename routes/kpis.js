@@ -51,6 +51,10 @@ router.get('/total-tasks', async (req, res) => {
         // Como no tenemos timestamps habilitados, usaremos dueDate o generaremos datos simples
         const localTasksPerDay = [];
 
+        // Definir fecha de hace 30 días para el período
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
         // Para simplificar, por ahora creamos una entrada con todas las tareas locales para hoy
         const today = new Date().toISOString().split('T')[0];
         if (localTasksCount > 0) {
@@ -92,7 +96,7 @@ router.get('/total-tasks', async (req, res) => {
             data: {
                 total: totalTasks,
                 period: cloudData.period || {
-                    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                    startDate: thirtyDaysAgo.toISOString().split('T')[0],
                     endDate: new Date().toISOString().split('T')[0],
                     days: 30
                 },
@@ -159,6 +163,10 @@ router.get('/total-tasks-todo', async (req, res) => {
 
         // 3️⃣ Obtener tareas TODO locales por día
         const localTasksPerDay = [];
+
+        // Definir fecha de hace 30 días para el período
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
         // Para simplificar, por ahora creamos una entrada con todas las tareas TODO locales para hoy
         const today = new Date().toISOString().split('T')[0];
@@ -269,6 +277,10 @@ router.get('/total-tasks-in-progress', async (req, res) => {
         // 3️⃣ Obtener tareas IN-PROGRESS locales por día
         const localTasksPerDay = [];
 
+        // Definir fecha de hace 30 días para el período
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
         // Para simplificar, por ahora creamos una entrada con todas las tareas IN-PROGRESS locales para hoy
         const today = new Date().toISOString().split('T')[0];
         if (localTasksInProgressCount > 0) {
@@ -377,6 +389,10 @@ router.get('/total-tasks-done', async (req, res) => {
 
         // 3️⃣ Obtener tareas DONE locales por día
         const localTasksPerDay = [];
+
+        // Definir fecha de hace 30 días para el período
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
         // Para simplificar, por ahora creamos una entrada con todas las tareas DONE locales para hoy
         const today = new Date().toISOString().split('T')[0];
