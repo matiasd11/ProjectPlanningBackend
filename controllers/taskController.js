@@ -3,7 +3,7 @@ const { User, Task, Project } = models;
 const { sequelize } = require('../config/database');
 const bonitaService = require('../services/bonitaService');
 const axios = require('axios');
-const { sendEmail } = require('../services/emailService');
+// const { sendEmail } = require('../services/emailService');
 
 
 const taskController = {
@@ -45,8 +45,17 @@ const taskController = {
      * @param {number} taskId - ID de la tarea
      */
     markLocalTaskAsDone: async (req, res) => {
+        transaction = await sequelize.transaction();
         try {
             const { taskId } = req.params;
+            const { username, password } = req.body;
+
+            if (!username || !password) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'username y password son requeridos'
+                });
+            }
 
             const task = await Task.findByPk(taskId);
             if (!task) {
@@ -64,6 +73,81 @@ const taskController = {
             }
 
             await task.update({ status: 'done' });
+
+            // Se chequea si todas las tareas del proyecto están completadas para pasar el proyecto a estado COMPLETADO
+            const projectId = task.projectId;
+            const localTasks = [];
+            const cloudTasks = [];
+            let localTasksError = null;
+            let cloudTasksError = null;
+
+            // Obtener tareas locales
+            try {
+                const where = { isCoverageRequest: false, projectId: parseInt(projectId) };
+                const tasks = await Task.findAll({ where });
+                localTasks.push(...tasks);
+            } catch (error) {
+                console.error('Error obteniendo tareas locales:', error);
+                localTasksError = error.message;
+            }
+
+            // Obtener tareas del cloud
+            if (username && password) {
+                try {
+                    // 🔐 Autenticación con Bonita
+                    const loggedIn = await bonitaService.authenticate(username, password);
+                    if (loggedIn) {
+                        const url = `${bonitaService.baseURL}/API/extension/getTasksByProject`;
+                        console.log(`📡 Llamando a Bonita Extension POST ${url}`);
+
+                        const response = await axios.post(
+                            url,
+                            { projectId: parseInt(projectId) },
+                            {
+                                headers: {
+                                    'Cookie': `${bonitaService.jsessionId}`,
+                                    'X-Bonita-API-Token': bonitaService.apiToken,
+                                    'Content-Type': 'application/json',
+                                },
+                            }
+                        );
+
+                        // Si response.data es un array, lo agregamos directamente
+                        // Si es un objeto con una propiedad data, la usamos
+                        const tasks = Array.isArray(response.data)
+                            ? response.data
+                            : (response.data?.data || response.data?.tasks || []);
+
+                        if (Array.isArray(tasks)) {
+                            cloudTasks.push(...tasks);
+                        }
+                    } else {
+                        cloudTasksError = 'No se pudo autenticar con Bonita';
+                    }
+                } catch (error) {
+                    console.error('Error obteniendo tareas del cloud:', error);
+                    cloudTasksError = error.response?.data || error.message;
+                }
+            }
+
+            // Combinar ambas listas
+            const allTasks = [...localTasks, ...cloudTasks];
+
+            // Verificar si todas las tareas están completadas
+            const allTasksCompleted = allTasks.every(task => task.status === 'done');
+
+            // Si están todas las tareas completadas, actualizar el estado del proyecto a COMPLETADO
+            if (allTasksCompleted) {
+                const project = await Project.findByPk(projectId, { transaction });
+
+                if (project && project.status !== 'COMPLETADO') {
+                    project.status = 'COMPLETADO';
+                    await project.save({ transaction });
+                    console.log(`✅ Proyecto ${projectId} actualizado a estado COMPLETADO - Todas las tareas están completadas`);
+                }
+            }
+
+            await transaction.commit();
 
             res.json({
                 success: true,
@@ -201,95 +285,95 @@ const taskController = {
     //========================================= CLOUD TASKS =========================================//
     //===============================================================================================//
 
-    /**
- * @desc Notificación desde Bonita de que existen nuevas tareas colaborativas en el cloud
- * @route POST /api/notifyCollaborativeTasks
- * @body {number} projectId - ID del proyecto
- * @body {string} message - Mensaje enviado por Bonita
- */
-    notifyCollaborativeTasks: async (req, res) => {
-        try {
-            const { projectId } = req.body;
+    // /**
+    //  * @desc Notificación desde Bonita de que existen nuevas tareas colaborativas en el cloud
+    //  * @route POST /api/notifyCollaborativeTasks
+    //  * @body {number} projectId - ID del proyecto
+    //  * @body {string} message - Mensaje enviado por Bonita
+    //  */
+    // notifyCollaborativeTasks: async (req, res) => {
+    //     try {
+    //         const { projectId } = req.body;
 
-            console.log("📩 Notificación colaborativa recibida desde Bonita:");
-            console.log("Proyecto:", projectId);
+    //         console.log("📩 Notificación colaborativa recibida desde Bonita:");
+    //         console.log("Proyecto:", projectId);
 
-            // --------------------------------------------
-            // 1. Buscar ONG asociada al proyecto
-            // --------------------------------------------
-            const project = await Project.findByPk(projectId);
+    //         // --------------------------------------------
+    //         // 1. Buscar ONG asociada al proyecto
+    //         // --------------------------------------------
+    //         const project = await Project.findByPk(projectId);
 
-            if (!project) {
-                return res.status(404).json({
-                    error: "No existe una ONG colaborativa asociada al proyecto."
-                });
-            }
+    //         if (!project) {
+    //             return res.status(404).json({
+    //                 error: "No existe una ONG colaborativa asociada al proyecto."
+    //             });
+    //         }
 
-            const message = `Hola,\n\nSe han creado nuevas tareas colaborativas para el proyecto "${project.name}". Por favor, ingresa al sistema para revisarlas y asignarte a las que puedas ayudar.\n\n¡Gracias por tu colaboración!\n\nSaludos,\nEquipo de Project Planning`;
+    //         const message = `Hola,\n\nSe han creado nuevas tareas colaborativas para el proyecto "${project.name}". Por favor, ingresa al sistema para revisarlas y asignarte a las que puedas ayudar.\n\n¡Gracias por tu colaboración!\n\nSaludos,\nEquipo de Project Planning`;
 
-            // --------------------------------------------
-            // 2. Enviar notificación (email)
-            // --------------------------------------------
+    //         // --------------------------------------------
+    //         // 2. Enviar notificación (email)
+    //         // --------------------------------------------
 
-            // Ejemplo: enviar email
-            await sendEmail({
-                to: "fdmalbran@gmail.com", // mail prueba 
-                subject: `Nuevas tareas colaborativas en "${project.name}"`,
-                text: message,
-                auth: {
-                    user: process.env.GMAIL_USER,
-                    pass: process.env.GMAIL_PASS
-                }
-            });
+    //         // Ejemplo: enviar email
+    //         await sendEmail({
+    //             to: "fdmalbran@gmail.com", // mail prueba 
+    //             subject: `Nuevas tareas colaborativas en "${project.name}"`,
+    //             text: message,
+    //             auth: {
+    //                 user: process.env.GMAIL_USER,
+    //                 pass: process.env.GMAIL_PASS
+    //             }
+    //         });
 
-            return res.json({
-                status: "OK",
-                notified: true
-            });
+    //         return res.json({
+    //             status: "OK",
+    //             notified: true
+    //         });
 
-        } catch (err) {
-            console.error("❌ Error en notifyCollaborativeTasks:", err);
-            return res.status(500).json({
-                error: "Error al procesar la notificación desde Bonita"
-            });
-        }
-    },
+    //     } catch (err) {
+    //         console.error("❌ Error en notifyCollaborativeTasks:", err);
+    //         return res.status(500).json({
+    //             error: "Error al procesar la notificación desde Bonita"
+    //         });
+    //     }
+    // },
 
-    notifyObservation: async (req, res) => {
-        try {
-
-
-            console.log("📩 Notificación de observación recibida desde Bonita:");
+    // notifyObservation: async (req, res) => {
+    //     try {
 
 
-            const message = `Hola,\n\nSe ha registrado una nueva observación"."\n\nPor favor ingresa al sistema para revisarla.\n\nSaludos,\nEquipo de Project Planning`;
+    //         console.log("📩 Notificación de observación recibida desde Bonita:");
 
-            // 2. Enviar notificación a dos correos
-            await sendEmail({
-                to: [
-                    "fdmalbran@gmail.com",
-                    "fdmalbran@gmail.com" // modificar mails 
-                ],
-                subject: `Nueva observación"`,
-                text: message,
-                auth: {
-                    user: process.env.GMAIL_USER,
-                    pass: process.env.GMAIL_PASS
-                }
-            });
 
-            return res.json({
-                status: "OK",
-                notified: true
-            });
+    //         const message = `Hola,\n\nSe ha registrado una nueva observación"."\n\nPor favor ingresa al sistema para revisarla.\n\nSaludos,\nEquipo de Project Planning`;
 
-        } catch (err) {
-            console.error("❌ Error en notifyObservation:", err);
-            return res.status(500).json({
-                error: "Error al procesar la notificación de observación desde Bonita"
-            });
-        }
-    },
+    //         // 2. Enviar notificación a dos correos
+    //         await sendEmail({
+    //             to: [
+    //                 "fdmalbran@gmail.com",
+    //                 "fdmalbran@gmail.com" // modificar mails 
+    //             ],
+    //             subject: `Nueva observación"`,
+    //             text: message,
+    //             auth: {
+    //                 user: process.env.GMAIL_USER,
+    //                 pass: process.env.GMAIL_PASS
+    //             }
+    //         });
+
+    //         return res.json({
+    //             status: "OK",
+    //             notified: true
+    //         });
+
+    //     } catch (err) {
+    //         console.error("❌ Error en notifyObservation:", err);
+    //         return res.status(500).json({
+    //             error: "Error al procesar la notificación de observación desde Bonita"
+    //         });
+    //     }
+    // },
 
 
     /**

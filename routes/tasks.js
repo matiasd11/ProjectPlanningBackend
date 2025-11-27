@@ -9,12 +9,12 @@ const taskController = require('../controllers/taskController');
 */
 router.post("/notifyObservation", taskController.notifyObservation);
 
-/**
- * @route POST /api/v1/tasks/notifyCollaborativeTasks
- * @desc Notificación enviada desde Bonita indicando que existen nuevas tareas colaborativas en el cloud.
- * @param {number} projectId - ID del proyecto
-*/
-router.post("/notifyCollaborativeTasks", taskController.notifyCollaborativeTasks);
+// /**
+//  * @route POST /api/v1/tasks/notifyCollaborativeTasks
+//  * @desc Notificación enviada desde Bonita indicando que existen nuevas tareas colaborativas en el cloud.
+//  * @param {number} projectId - ID del proyecto
+// */
+// router.post("/notifyCollaborativeTasks", taskController.notifyCollaborativeTasks);
 
 /**
  * @route GET /api/v1/tasks/coverage-request/:caseId/status
@@ -35,7 +35,7 @@ router.get('/local/:projectId', taskController.getLocalTasks);
  * @desc Marcar una tarea local como cumplida
  * @param {number} taskId - ID de la tarea
  */
-router.put('/local/:taskId/done', taskController.markLocalTaskAsDone);
+router.post('/local/:taskId/done', taskController.markLocalTaskAsDone);
 
 /**
  * @route GET /api/v1/tasks/coverage-request/:caseId/status
