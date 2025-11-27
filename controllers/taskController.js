@@ -347,10 +347,10 @@ const taskController = {
             const message = `Hola,\n\nSe ha registrado una nueva observación".\n\nPor favor ingresa al sistema para revisarla.\n\nSaludos,\nEquipo de Project Planning`;
 
             // 2. Enviar notificación a dos correos (comentado temporalmente)
-            /* await sendEmail({
+            await sendEmail({
                 to: [
-                    "fdmalbran@gmail.com",
-                    "fdmalbran@gmail.com" // modificar mails 
+                    "ongPrimaria123@gmail.com",
+                    "ongcolaboradora@gmail.com" // modificar mails 
                 ],
                 subject: `Nueva observación"`,
                 text: message,
@@ -358,7 +358,7 @@ const taskController = {
                     user: process.env.GMAIL_USER,
                     pass: process.env.GMAIL_PASS
                 }
-            }); */
+            });
 
             return res.json({
                 status: "OK",
@@ -1011,6 +1011,14 @@ const taskController = {
                 }
             );
 
+            // Consultar las tareas del caso en Bonita
+            console.log(`Obteniendo tareas del caso: ${bonitaCaseId}`);
+            const tasks = await bonitaService.getAllTasksForCase(bonitaCaseId);
+            console.log(`Tareas: ${JSON.stringify(tasks)}`);
+
+            // Completar la tarea del caso
+            await bonitaService.autoCompleteTask(tasks[0].id, {});
+
             res.json({
                 success: true,
                 data: response.data.data || [],
@@ -1084,21 +1092,22 @@ const taskController = {
     },
 
     /**
-     * @desc Proxy a Bonita /API/extension/taskObservationResolved tras autenticación
+     * @desc Proxy a Bonita /API/extension/taskObservationResolved tras autenticaci贸n
      * @body {string} username - Usuario Bonita
      * @body {string} password - Password Bonita
-     * @body {number} userId - ID del usuario que resuelve la observación
-     * @body {number} observationId - ID de la observación
-     * @body {string} resolution - Resolución de la observación
+     * @body {number} userId - ID del usuario que resuelve la observaci贸n
+     * @body {number} observationId - ID de la observaci贸n
+     * @body {number} bonitaCaseId - ID del caso en Bonita
+     * @body {string} resolution - Resoluci贸n de la observaci贸n
      */
     markTaskObservationResolved: async (req, res) => {
         try {
-            const { username, password, observationId, userId, resolution } = req.body;
-            if (!username || !password || !observationId || !userId || !resolution) {
+            const { username, password, observationId, userId, resolution, bonitaCaseId } = req.body;
+            if (!username || !password || !observationId || !userId || !resolution || !bonitaCaseId) {
                 return res.status(400).json({ success: false, message: 'Faltan datos requeridos en el body' });
             }
 
-            // 🔐 Autenticación Bonita
+            // 馃攼 Autenticaci贸n Bonita
             const loggedIn = await bonitaService.authenticate(username, password);
             if (!loggedIn) {
                 return res.status(500).json({ success: false, message: 'No se pudo autenticar con Bonita' });
@@ -1123,6 +1132,14 @@ const taskController = {
                     }
                 }
             );
+
+            // Consultar las tareas del caso en Bonita
+            console.log(`Obteniendo tareas del caso: ${bonitaCaseId}`);
+            const tasks = await bonitaService.getAllTasksForCase(bonitaCaseId);
+            console.log(`Tareas: ${JSON.stringify(tasks)}`);
+
+            // Completar la tarea del caso
+            await bonitaService.autoCompleteTask(tasks[0].id, {});
 
             res.json({
                 success: true,
