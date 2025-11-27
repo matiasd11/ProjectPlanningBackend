@@ -3,7 +3,7 @@ const { User, Task, Project } = models;
 const { sequelize } = require('../config/database');
 const bonitaService = require('../services/bonitaService');
 const axios = require('axios');
-// const { sendEmail } = require('../services/emailService');
+// const { sendEmail } = require('../services/emailService'); // Comentado temporalmente hasta instalar nodemailer
 
 
 const taskController = {
@@ -315,16 +315,16 @@ const taskController = {
     //         // 2. Enviar notificación (email)
     //         // --------------------------------------------
 
-    //         // Ejemplo: enviar email
-    //         await sendEmail({
-    //             to: "fdmalbran@gmail.com", // mail prueba 
-    //             subject: `Nuevas tareas colaborativas en "${project.name}"`,
-    //             text: message,
-    //             auth: {
-    //                 user: process.env.GMAIL_USER,
-    //                 pass: process.env.GMAIL_PASS
-    //             }
-    //         });
+    // Ejemplo: enviar email (comentado temporalmente)
+    /* await sendEmail({
+        to: "fdmalbran@gmail.com", // mail prueba 
+        subject: `Nuevas tareas colaborativas en "${project.name}"`,
+        text: message,
+        auth: {
+            user: process.env.GMAIL_USER,
+            pass: process.env.GMAIL_PASS
+        }
+    }); */
 
     //         return res.json({
     //             status: "OK",
@@ -348,19 +348,19 @@ const taskController = {
 
     //         const message = `Hola,\n\nSe ha registrado una nueva observación"."\n\nPor favor ingresa al sistema para revisarla.\n\nSaludos,\nEquipo de Project Planning`;
 
-    //         // 2. Enviar notificación a dos correos
-    //         await sendEmail({
-    //             to: [
-    //                 "fdmalbran@gmail.com",
-    //                 "fdmalbran@gmail.com" // modificar mails 
-    //             ],
-    //             subject: `Nueva observación"`,
-    //             text: message,
-    //             auth: {
-    //                 user: process.env.GMAIL_USER,
-    //                 pass: process.env.GMAIL_PASS
-    //             }
-    //         });
+    // 2. Enviar notificación a dos correos (comentado temporalmente)
+    /* await sendEmail({
+        to: [
+            "fdmalbran@gmail.com",
+            "fdmalbran@gmail.com" // modificar mails 
+        ],
+        subject: `Nueva observación"`,
+        text: message,
+        auth: {
+            user: process.env.GMAIL_USER,
+            pass: process.env.GMAIL_PASS
+        }
+    }); */
 
     //         return res.json({
     //             status: "OK",
@@ -989,6 +989,8 @@ const taskController = {
             if (!loggedIn) {
                 return res.status(500).json({ success: false, message: 'No se pudo autenticar con Bonita' });
             }
+            const bonitaCase = await bonitaService.startObservationProcess();
+            const bonitaCaseId = bonitaCase.id || bonitaCase.caseId;
 
             const url = `${bonitaService.baseURL}/API/extension/taskObservation`;
 
@@ -999,7 +1001,8 @@ const taskController = {
                 {
                     taskId,
                     observations,
-                    userId
+                    userId,
+                    bonitaCaseId,
                 },
                 {
                     headers: {
