@@ -768,6 +768,48 @@ class BonitaService {
   }
 
   /**
+   * Obtener la definición del proceso (siempre busca la versión más actual)
+   */
+  async getObservationProcessDefinition() {
+    try {
+      if (!this.apiToken) {
+        await this.authenticate();
+      }
+
+      const response = await axios.get(`${this.baseURL}/API/bpm/process`, {
+        headers: {
+          'Cookie': this.jsessionId,
+          'X-Bonita-API-Token': this.apiToken,
+          'Content-Type': 'application/json'
+        },
+        params: {
+          s: process.env.BONITA_OBSERVATION_PROCESS_NAME || 'Proceso de seguimiento de proyecto',
+          p: 0,
+          c: 1
+        }
+      });
+
+      if (response.data && response.data.length > 0) {
+        const currentProcessId = response.data[0].id;
+
+        // Solo log si el process ID cambió
+        if (this.processDefinitionId !== currentProcessId) {
+          console.log('Process ID actualizado:', this.processDefinitionId, '->', currentProcessId);
+        }
+
+        this.processDefinitionId = currentProcessId;
+        console.log('Proceso encontrado:', response.data[0].name, 'ID:', this.processDefinitionId);
+        return response.data[0];
+      }
+
+      throw new Error('Proceso no encontrado');
+    } catch (error) {
+      console.error('Error obteniendo proceso:', error.message);
+      return null;
+    }
+  }
+
+  /**
    * Iniciar una instancia del proceso en Bonita
    */
   async startProcess(projectData) {
@@ -778,6 +820,54 @@ class BonitaService {
 
       // Obtener el último processDefinitionId
       await this.getProcessDefinition();
+
+      // Construir payload con variables en formato correcto
+      const variables = projectData
+        ? Object.entries(projectData).map(([key, value]) => ({
+          name: key,
+          value: typeof value === 'object' ? JSON.stringify(value) : value,
+          type: typeof value === 'number' ? 'java.lang.Long' : 'java.lang.String'
+        }))
+        : [];
+
+      const payload = {
+        processDefinitionId: this.processDefinitionId,
+        variables
+      };
+
+      console.log('🚀 Iniciando proceso en Bonita con payload:', JSON.stringify(payload, null, 2));
+
+      const response = await axios.post(
+        `${this.baseURL}/API/bpm/case`,
+        payload,
+        {
+          headers: {
+            'Cookie': this.jsessionId,
+            'X-Bonita-API-Token': this.apiToken,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log('✅ Caso creado en Bonita:', response.data.id || response.data.caseId);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error iniciando proceso en Bonita:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  /**
+ * Iniciar una instancia del proceso en Bonita
+ */
+  async startObservationProcess() {
+    try {
+      if (!this.apiToken) {
+        await this.authenticate();
+      }
+
+      // Obtener el último processDefinitionId
+      await this.getObservationProcessDefinition();
 
       // Construir payload con variables en formato correcto
       const variables = projectData
