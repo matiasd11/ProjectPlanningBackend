@@ -165,9 +165,28 @@ const projectController = {
 
       // Validaciones
       if (!name || !startDate || !endDate || !ownerId) {
+        await transaction.rollback();
         return res.status(400).json({
           success: false,
           message: 'Faltan campos obligatorios: name, startDate, endDate, ownerId'
+        });
+      }
+
+      // Validar que haya al menos una tarea con isCoverageRequest = true
+      if (!tasks || tasks.length === 0) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'El proyecto debe tener al menos una tarea'
+        });
+      }
+
+      const hasCoverageRequest = tasks.some(task => task.isCoverageRequest === true);
+      if (!hasCoverageRequest) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: 'El proyecto debe tener al menos una tarea marcada como pedido de cobertura)'
         });
       }
 
@@ -175,6 +194,7 @@ const projectController = {
       const owner = await bonitaService.getBonitaUserById(ownerId);
 
       if (!owner) {
+        await transaction.rollback();
         return res.status(404).json({
           success: false,
           message: 'ONG no encontrada'
