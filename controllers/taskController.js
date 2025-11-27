@@ -145,6 +145,29 @@ const taskController = {
                     await project.save({ transaction });
                     console.log(`✅ Proyecto ${projectId} actualizado a estado COMPLETADO - Todas las tareas están completadas`);
                 }
+
+
+                // Obtener las tareas del caso en Bonita
+                console.log(`🔍 Obteniendo tareas del caso de Bonita: ${project.bonitaCaseId}`);
+                const tasks = await bonitaService.getAllTasksForCase(project.bonitaCaseId);
+                console.log(`📋 Tareas encontradas:`, tasks.map(t => ({ id: t.id, name: t.name, state: t.state })));
+
+                if (!tasks || tasks.length === 0) {
+                    await transaction.rollback();
+                    return res.status(404).json({
+                        success: false,
+                        message: 'No se encontraron tareas en el caso de Bonita'
+                    });
+                }
+
+                // Buscar la primera tarea humana pendiente (state === 'ready')
+                const humanTask = tasks.find(t => t.state === 'ready') || tasks[0];
+                console.log(`⚡ Completando tarea de Bonita: ${humanTask.name} (ID: ${humanTask.id})`);
+
+                // Completar la tarea automáticamente
+                await bonitaService.autoCompleteTask(humanTask.id, {});
+
+                console.log(`✅ Tarea de Bonita completada exitosamente`);
             }
 
             await transaction.commit();
@@ -883,7 +906,7 @@ const taskController = {
             // Verificar si todas las tareas están completadas
             const allTasksCompleted = allTasks.every(task => task.status === 'done');
 
-            // Si están todas las tareas completadas, actualizar el estado del proyecto a COMPLETADO
+            // Si están todas las tareas completadas, actualizar el estado del proyecto a COMPLETADO y completar tarea de Bonita
             if (allTasksCompleted) {
                 const project = await Project.findByPk(projectId, { transaction });
 
@@ -892,7 +915,30 @@ const taskController = {
                     await project.save({ transaction });
                     console.log(`✅ Proyecto ${projectId} actualizado a estado COMPLETADO - Todas las tareas están completadas`);
                 }
+
+                // Obtener las tareas del caso en Bonita
+                console.log(`🔍 Obteniendo tareas del caso de Bonita: ${project.bonitaCaseId}`);
+                const tasks = await bonitaService.getAllTasksForCase(project.bonitaCaseId);
+                console.log(`📋 Tareas encontradas:`, tasks.map(t => ({ id: t.id, name: t.name, state: t.state })));
+
+                if (!tasks || tasks.length === 0) {
+                    await transaction.rollback();
+                    return res.status(404).json({
+                        success: false,
+                        message: 'No se encontraron tareas en el caso de Bonita'
+                    });
+                }
+
+                // Buscar la primera tarea humana pendiente (state === 'ready')
+                const humanTask = tasks.find(t => t.state === 'ready') || tasks[0];
+                console.log(`⚡ Completando tarea de Bonita: ${humanTask.name} (ID: ${humanTask.id})`);
+
+                // Completar la tarea automáticamente
+                await bonitaService.autoCompleteTask(humanTask.id, {});
+
+                console.log(`✅ Tarea de Bonita completada exitosamente`);
             }
+        
 
             await transaction.commit();
 
