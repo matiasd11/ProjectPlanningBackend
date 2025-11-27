@@ -742,7 +742,7 @@ class BonitaService {
           'Content-Type': 'application/json'
         },
         params: {
-          s: process.env.BONITA_PROCESS_NAME || 'Proceso de Ejecución de Proyecto de Financiamiento',
+          f: `name=${process.env.BONITA_PROCESS_NAME}`,
           p: 0,
           c: 1
         }
@@ -784,7 +784,7 @@ class BonitaService {
           'Content-Type': 'application/json'
         },
         params: {
-          s: process.env.BONITA_OBSERVATION_PROCESS_NAME || 'Proceso de seguimiento de proyecto',
+          f: `name=${process.env.BONITA_OBSERVATION_PROCESS_NAME}`,
           p: 0,
           c: 1
         }
