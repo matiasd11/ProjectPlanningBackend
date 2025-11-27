@@ -870,13 +870,7 @@ class BonitaService {
       await this.getObservationProcessDefinition();
 
       // Construir payload con variables en formato correcto
-      const variables = projectData
-        ? Object.entries(projectData).map(([key, value]) => ({
-          name: key,
-          value: typeof value === 'object' ? JSON.stringify(value) : value,
-          type: typeof value === 'number' ? 'java.lang.Long' : 'java.lang.String'
-        }))
-        : [];
+      const variables = [];
 
       const payload = {
         processDefinitionId: this.processDefinitionId,
