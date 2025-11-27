@@ -7,6 +7,7 @@ class BonitaService {
     this.apiToken = null;
     this.jsessionId = null;
     this.processDefinitionId = process.env.BONITA_PROCESS_ID || null;
+    this.observationProcessDefinitionId = null;
     this.groupName = "ONGs";
   }
 
@@ -793,12 +794,12 @@ class BonitaService {
         const currentProcessId = response.data[0].id;
 
         // Solo log si el process ID cambió
-        if (this.processDefinitionId !== currentProcessId) {
-          console.log('Process ID actualizado:', this.processDefinitionId, '->', currentProcessId);
+        if (this.observationProcessDefinitionId !== currentProcessId) {
+          console.log('Observation Process ID actualizado:', this.observationProcessDefinitionId, '->', currentProcessId);
         }
 
-        this.processDefinitionId = currentProcessId;
-        console.log('Proceso encontrado:', response.data[0].name, 'ID:', this.processDefinitionId);
+        this.observationProcessDefinitionId = currentProcessId;
+        console.log('Proceso de observación encontrado:', response.data[0].name, 'ID:', this.observationProcessDefinitionId);
         return response.data[0];
       }
 
@@ -873,11 +874,11 @@ class BonitaService {
       const variables = [];
 
       const payload = {
-        processDefinitionId: this.processDefinitionId,
+        processDefinitionId: this.observationProcessDefinitionId,
         variables
       };
 
-      console.log('🚀 Iniciando proceso en Bonita con payload:', JSON.stringify(payload, null, 2));
+      console.log('🚀 Iniciando proceso de observación en Bonita con payload:', JSON.stringify(payload, null, 2));
 
       const response = await axios.post(
         `${this.baseURL}/API/bpm/case`,
